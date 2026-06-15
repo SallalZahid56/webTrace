@@ -1,3 +1,6 @@
+// ── Config ─────────────────────────────────────────────────────────
+const API_BASE = 'http://localhost:8000';
+
 // ── State ──────────────────────────────────────────────────────────
 const state = {
   activeTab: 'urls',
@@ -94,6 +97,34 @@ function collectUrls() {
   return state.csvData.map(r => (r[i]||'').trim()).filter(v => v.startsWith('http'));
 }
 
+// ── Real API call (replaces mockScrape) ───────────────────────────
+async function scrapeUrl(url) {
+  const checkContactPage = document.getElementById('opt-contact')?.checked ?? true;
+  const deduplicateEmails = document.getElementById('opt-dedup')?.checked ?? true;
+
+  const response = await fetch(`${API_BASE}/scrape`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      check_contact_page: checkContactPage,
+      deduplicate_emails: deduplicateEmails,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Server error ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  // If the backend returned an error field, treat it as a thrown error
+  if (data.error) throw new Error(data.error);
+
+  return data;
+}
+
 // ── Activity feed helpers ──────────────────────────────────────────
 function buildFeedItem(idx, url, status, data) {
   const host = hostname(url);
@@ -138,8 +169,17 @@ async function startScraping() {
   const urls = collectUrls();
   if (!urls.length) { showToast('No valid URLs found. Add URLs starting with https://', 'error'); return; }
 
+  // Check backend is reachable before starting
+  try {
+    const ping = await fetch(`${API_BASE}/`);
+    if (!ping.ok) throw new Error();
+  } catch {
+    showToast('Cannot reach backend. Is uvicorn running on port 8000?', 'error');
+    return;
+  }
+
   state.isRunning = true;
-  state.results = [];
+  state.results   = [];
 
   // Switch left pane to feed view
   document.getElementById('input-section').style.display = 'none';
@@ -163,9 +203,10 @@ async function startScraping() {
 
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
+
     // Mark as active in feed
     document.getElementById(`feed-${i+1}`).outerHTML = buildFeedItem(i+1, url, 'pending', null);
-    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth', block:'nearest'});
 
     document.getElementById('prog-label').textContent = `Scanning ${hostname(url)}…`;
     document.getElementById('header-status-text').textContent = `${i+1} / ${urls.length} scanning`;
@@ -173,10 +214,9 @@ async function startScraping() {
     addTableRow(i+1, url, null, 'scanning');
 
     try {
-      const data = await mockScrape(url);
+      const data = await scrapeUrl(url);
       state.results.push({ url, ...data });
       updateTableRow(i+1, url, data, 'done');
-      // Update feed item
       const el = document.getElementById(`feed-${i+1}`);
       if (el) el.outerHTML = buildFeedItem(i+1, url, 'done', data);
     } catch(err) {
@@ -238,7 +278,7 @@ function addTableRow(idx, url, data, status) {
   tr.id = `row-${idx}`; tr.className = 'row-appear';
   tr.innerHTML = buildRowHTML(idx, url, data, status);
   document.getElementById('results-body').appendChild(tr);
-  tr.scrollIntoView({behavior:'smooth',block:'nearest'});
+  tr.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 function updateTableRow(idx, url, data, status) {
   const tr = document.getElementById(`row-${idx}`);
@@ -265,55 +305,57 @@ function buildRowHTML(idx, url, data, status) {
     <td>${socials.length ? socials.map(s=>`<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
 }
 
-// ── Download ───────────────────────────────────────────────────────
+// ── Download CSV ───────────────────────────────────────────────────
 function downloadCSV() {
   if (!state.results.length) return;
-  let csv = 'URL,Emails,Phone Numbers,Social Links\n';
-  state.results.forEach(r => {
-    csv += [r.url, r.emails?.join(' | ')??'', r.phones?.join(' | ')??'', r.socials?.map(s=>s.url).join(' | ')??''].map(csvEscape).join(',') + '\n';
-  });
+
+  const isCSVMode = state.activeTab === 'csv' && state.csvData;
+  let csv = '';
+
+  if (isCSVMode) {
+    // Enrich mode — append columns to original CSV
+    const colIdx = parseInt(document.getElementById('url-column').value, 10);
+    csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'Social Links'].map(csvEscape).join(',') + '\n';
+    state.csvData.forEach(row => {
+      const url    = (row[colIdx] || '').trim();
+      const result = state.results.find(r => r.url === url);
+      csv += [
+        ...row,
+        result?.emails?.join(' | ')  ?? '',
+        result?.phones?.join(' | ')  ?? '',
+        result?.socials?.map(s => s.url).join(' | ') ?? '',
+      ].map(csvEscape).join(',') + '\n';
+    });
+  } else {
+    // Fresh CSV — URL + extracted data
+    csv += 'URL,Emails,Phone Numbers,Social Links\n';
+    state.results.forEach(r => {
+      csv += [
+        r.url,
+        r.emails?.join(' | ')  ?? '',
+        r.phones?.join(' | ')  ?? '',
+        r.socials?.map(s => s.url).join(' | ') ?? '',
+      ].map(csvEscape).join(',') + '\n';
+    });
+  }
+
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url  = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), {href:url,download:`webtrace-${datestamp()}.csv`});
+  const a = Object.assign(document.createElement('a'), {href:url, download:`webtrace-${datestamp()}.csv`});
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function csvEscape(v) { const s=String(v??''); return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s; }
+function csvEscape(v) {
+  const s = String(v ?? '');
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
 // ── Helpers ────────────────────────────────────────────────────────
-function hostname(url) { try { return new URL(url).hostname.replace('www.',''); } catch { return url; } }
-function datestamp() { return new Date().toISOString().slice(0,10); }
-function showToast(msg, type='info') {
+function hostname(url) { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } }
+function datestamp() { return new Date().toISOString().slice(0, 10); }
+function showToast(msg, type = 'info') {
   const t = document.createElement('div');
   t.className = `toast toast-${type}`; t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateY(6px)'; setTimeout(()=>t.remove(),300); }, 3000);
-}
-
-// ── Mock scraper ───────────────────────────────────────────────────
-async function mockScrape(url) {
-  await sleep(700 + Math.random() * 1100);
-  if (Math.random() < 0.12) throw new Error('Timeout');
-  const host = hostname(url);
-  const hasEmail  = Math.random() > 0.25;
-  const hasPhone  = Math.random() > 0.45;
-  const numSocial = Math.floor(Math.random() * 4);
-  const allSocials = [
-    {platform:'linkedin',  url:`https://linkedin.com/company/${host}`},
-    {platform:'twitter',   url:`https://twitter.com/${host}`},
-    {platform:'facebook',  url:`https://facebook.com/${host}`},
-    {platform:'instagram', url:`https://instagram.com/${host}`},
-    {platform:'github',    url:`https://github.com/${host}`},
-  ];
-  return {
-    emails:  hasEmail ? [`info@${host}`,`contact@${host}`].slice(0,1+Math.floor(Math.random()*2)) : [],
-    phones:  hasPhone ? [`+1 (555) ${Math.floor(100+Math.random()*900)}-${Math.floor(1000+Math.random()*9000)}`] : [],
-    socials: shuffle(allSocials).slice(0, numSocial),
-  };
-}
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-function shuffle(arr) {
-  const a=[...arr];
-  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
-  return a;
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateY(6px)'; setTimeout(()=>t.remove(), 300); }, 3000);
 }
