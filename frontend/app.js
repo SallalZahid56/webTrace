@@ -1,6 +1,4 @@
-// WebTrace — app.js
-// All Tailwind class references removed; uses plain CSS classes from style.css
-
+// ── State ──────────────────────────────────────────────────────────
 const state = {
   activeTab: 'urls',
   csvData: null,
@@ -9,314 +7,313 @@ const state = {
   isRunning: false,
 };
 
-// ── Tab switching ─────────────────────────────────────────────────
+// ── Tab switching ──────────────────────────────────────────────────
 function switchTab(tab) {
   state.activeTab = tab;
-  ['urls', 'csv'].forEach(t => {
-    document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
-    document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
-  });
+  document.getElementById('tab-urls').classList.toggle('active', tab === 'urls');
+  document.getElementById('tab-csv').classList.toggle('active', tab === 'csv');
+  document.getElementById('panel-urls').style.display = tab === 'urls' ? 'block' : 'none';
+  document.getElementById('panel-csv').style.display  = tab === 'csv'  ? 'block' : 'none';
 }
 
-// ── URL input ─────────────────────────────────────────────────────
+// ── URL input ──────────────────────────────────────────────────────
 document.getElementById('url-input').addEventListener('input', function () {
   const urls = parseUrlText(this.value);
   document.getElementById('url-count').textContent =
     urls.length === 0 ? '0 URLs entered' : `${urls.length} URL${urls.length > 1 ? 's' : ''} entered`;
 });
-
 function clearUrls() {
   document.getElementById('url-input').value = '';
   document.getElementById('url-count').textContent = '0 URLs entered';
 }
-
 function parseUrlText(text) {
   return text.split('\n').map(l => l.trim())
-    .filter(l => l.length > 0 && (l.startsWith('http://') || l.startsWith('https://')));
+    .filter(l => l.startsWith('http://') || l.startsWith('https://'));
 }
 
-// ── CSV Upload ────────────────────────────────────────────────────
-function handleDragOver(e) {
-  e.preventDefault();
-  document.getElementById('drop-zone').classList.add('over');
+// ── Option tiles ───────────────────────────────────────────────────
+function toggleTile(label) {
+  const cb = label.querySelector('input[type="checkbox"]');
+  setTimeout(() => {
+    label.classList.toggle('selected', cb.checked);
+  }, 0);
 }
-function handleDragLeave() {
-  document.getElementById('drop-zone').classList.remove('over');
-}
-function handleDrop(e) {
-  e.preventDefault();
-  handleDragLeave();
-  const file = e.dataTransfer.files[0];
-  if (file) processCSVFile(file);
-}
-function handleFileUpload(e) {
-  const file = e.target.files[0];
-  if (file) processCSVFile(file);
-}
+
+// ── CSV ────────────────────────────────────────────────────────────
+function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('over'); }
+function handleDragLeave() { document.getElementById('drop-zone').classList.remove('over'); }
+function handleDrop(e) { e.preventDefault(); handleDragLeave(); const f = e.dataTransfer.files[0]; if (f) processCSVFile(f); }
+function handleFileUpload(e) { const f = e.target.files[0]; if (f) processCSVFile(f); }
 
 function processCSVFile(file) {
-  if (!file.name.endsWith('.csv')) { alert('Please upload a .csv file.'); return; }
+  if (!file.name.endsWith('.csv')) { showToast('Please upload a .csv file.', 'error'); return; }
   const reader = new FileReader();
-  reader.onload = function (e) {
+  reader.onload = e => {
     const parsed = parseCSV(e.target.result);
-    if (parsed.rows.length === 0) { alert('CSV appears empty or could not be parsed.'); return; }
-    state.csvData    = parsed.rows;
-    state.csvHeaders = parsed.headers;
-
+    if (!parsed.rows.length) { showToast('CSV appears empty.', 'error'); return; }
+    state.csvData = parsed.rows; state.csvHeaders = parsed.headers;
     const sel = document.getElementById('url-column');
     sel.innerHTML = '';
     parsed.headers.forEach((h, i) => {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = h || `Column ${i + 1}`;
-      if (/url|website|domain|link|site/i.test(h)) opt.selected = true;
-      sel.appendChild(opt);
+      const o = document.createElement('option');
+      o.value = i; o.textContent = h || `Column ${i+1}`;
+      if (/url|website|domain|link|site/i.test(h)) o.selected = true;
+      sel.appendChild(o);
     });
-
-    document.getElementById('file-name-label').textContent =
-      `${file.name} — ${parsed.rows.length} row${parsed.rows.length !== 1 ? 's' : ''} loaded`;
-    document.getElementById('col-selector').classList.add('show');
+    document.getElementById('file-name-label').textContent = `${file.name} — ${parsed.rows.length} rows`;
+    document.getElementById('file-ok').classList.add('show');
+    document.getElementById('col-select').classList.add('show');
     updateCsvUrlCount();
   };
   reader.readAsText(file);
 }
-
-document.getElementById('url-column')?.addEventListener('change', updateCsvUrlCount);
-
+document.getElementById('url-column').addEventListener('change', updateCsvUrlCount);
 function updateCsvUrlCount() {
   if (!state.csvData) return;
-  const colIdx = parseInt(document.getElementById('url-column').value, 10);
-  const urls = state.csvData.map(row => (row[colIdx] || '').trim()).filter(v => v.startsWith('http'));
-  document.getElementById('csv-url-count').textContent =
-    `${urls.length} valid URL${urls.length !== 1 ? 's' : ''} found in this column`;
+  const i = parseInt(document.getElementById('url-column').value, 10);
+  const n = state.csvData.map(r => (r[i]||'').trim()).filter(v => v.startsWith('http')).length;
+  document.getElementById('csv-url-count').textContent = `${n} valid URL${n!==1?'s':''} in this column`;
 }
-
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
-  if (!lines.length) return { headers: [], rows: [] };
   return { headers: splitCSVLine(lines[0]), rows: lines.slice(1).map(splitCSVLine) };
 }
-
 function splitCSVLine(line) {
-  const result = []; let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') { inQ = !inQ; continue; }
-    if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; continue; }
-    cur += ch;
+  const r=[]; let c='',q=false;
+  for (let i=0;i<line.length;i++){
+    if(line[i]==='"'){q=!q;continue}
+    if(line[i]===','&&!q){r.push(c.trim());c='';continue}
+    c+=line[i];
   }
-  result.push(cur.trim());
-  return result;
+  r.push(c.trim()); return r;
 }
-
-// ── Collect URLs ──────────────────────────────────────────────────
 function collectUrls() {
   if (state.activeTab === 'urls') return parseUrlText(document.getElementById('url-input').value);
   if (!state.csvData) return [];
-  const colIdx = parseInt(document.getElementById('url-column').value, 10);
-  return state.csvData.map(row => (row[colIdx] || '').trim()).filter(v => v.startsWith('http'));
+  const i = parseInt(document.getElementById('url-column').value, 10);
+  return state.csvData.map(r => (r[i]||'').trim()).filter(v => v.startsWith('http'));
 }
 
-// ── Start Scraping ────────────────────────────────────────────────
+// ── Activity feed helpers ──────────────────────────────────────────
+function buildFeedItem(idx, url, status, data) {
+  const host = hostname(url);
+  let dotHTML = '', metaHTML = '', foundHTML = '';
+
+  if (status === 'pending') {
+    dotHTML = `<div class="feed-dot active"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:10px;height:10px;animation:spin .7s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"/></svg></div>`;
+    metaHTML = `<div class="feed-meta">Fetching homepage…</div>`;
+  } else if (status === 'done') {
+    dotHTML = `<div class="feed-dot done"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg></div>`;
+    const total = (data?.emails?.length||0) + (data?.phones?.length||0) + (data?.socials?.length||0);
+    if (total > 0) {
+      metaHTML = `<div class="feed-meta">${data.emails.length} email${data.emails.length!==1?'s':''} · ${data.phones.length} phone${data.phones.length!==1?'s':''} · ${data.socials.length} social</div>`;
+      foundHTML = `<span class="feed-found ok">✓ Contact data found</span>`;
+    } else {
+      metaHTML = `<div class="feed-meta">Scanned — no contact data found</div>`;
+      foundHTML = `<span class="feed-found empty">No data</span>`;
+    }
+  } else if (status === 'error') {
+    dotHTML = `<div class="feed-dot" style="border-color:var(--red);color:var(--red)">✕</div>`;
+    metaHTML = `<div class="feed-meta">Connection failed</div>`;
+    foundHTML = `<span class="feed-found err">Error</span>`;
+  } else {
+    dotHTML = `<div class="feed-dot">${idx}</div>`;
+    metaHTML = `<div class="feed-meta">Queued</div>`;
+  }
+
+  return `
+    <div class="feed-item" id="feed-${idx}">
+      ${dotHTML}
+      <div class="feed-content">
+        <div class="feed-label${status==='idle'?' muted':''}">${host}</div>
+        ${metaHTML}
+        ${foundHTML}
+      </div>
+    </div>`;
+}
+
+// ── Main scraping loop ─────────────────────────────────────────────
 async function startScraping() {
   if (state.isRunning) return;
   const urls = collectUrls();
   if (!urls.length) { showToast('No valid URLs found. Add URLs starting with https://', 'error'); return; }
 
   state.isRunning = true;
-  state.results   = [];
+  state.results = [];
 
-  document.getElementById('results-body').innerHTML = '';
-  document.getElementById('results-section').classList.add('show');
-  document.getElementById('progress-section').classList.add('show');
+  // Switch left pane to feed view
+  document.getElementById('input-section').style.display = 'none';
+  document.getElementById('activity-feed').classList.add('show');
+  document.getElementById('run-btn').disabled = true;
   document.getElementById('header-status').classList.add('show');
-  document.getElementById('download-btn').disabled = true;
-  document.getElementById('start-btn').disabled    = true;
-  document.getElementById('results-summary').textContent = 'Scanning…';
+  document.getElementById('header-status-text').textContent = `0 / ${urls.length} scanned`;
 
-  updateProgress(0, urls.length);
+  // Show progress strip + table
+  document.getElementById('progress-strip').classList.add('show');
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('table-wrap').style.display = 'block';
+  document.getElementById('results-body').innerHTML = '';
+
+  // Pre-populate feed with all URLs as idle
+  const feedList = document.getElementById('feed-list');
+  feedList.innerHTML = '';
+  urls.forEach((url, i) => {
+    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i+1, url, 'idle', null));
+  });
 
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
-    document.getElementById('progress-label').textContent    = `Scanning ${hostname(url)}…`;
-    document.getElementById('header-status-text').textContent = `${i + 1} / ${urls.length} sites`;
+    // Mark as active in feed
+    document.getElementById(`feed-${i+1}`).outerHTML = buildFeedItem(i+1, url, 'pending', null);
+    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+    document.getElementById('prog-label').textContent = `Scanning ${hostname(url)}…`;
+    document.getElementById('header-status-text').textContent = `${i+1} / ${urls.length} scanning`;
     updateProgress(i, urls.length);
-    addResultRow(i + 1, url, null);
+    addTableRow(i+1, url, null, 'scanning');
 
     try {
       const data = await mockScrape(url);
       state.results.push({ url, ...data });
-      updateResultRow(i + 1, url, data, 'done');
-    } catch (err) {
-      state.results.push({ url, emails: [], phones: [], socials: [], error: err.message });
-      updateResultRow(i + 1, url, null, 'error');
+      updateTableRow(i+1, url, data, 'done');
+      // Update feed item
+      const el = document.getElementById(`feed-${i+1}`);
+      if (el) el.outerHTML = buildFeedItem(i+1, url, 'done', data);
+    } catch(err) {
+      state.results.push({ url, emails:[], phones:[], socials:[], error: err.message });
+      updateTableRow(i+1, url, null, 'error');
+      const el = document.getElementById(`feed-${i+1}`);
+      if (el) el.outerHTML = buildFeedItem(i+1, url, 'error', null);
     }
 
-    updateProgress(i + 1, urls.length);
-    updateResultsSummary();
+    updateProgress(i+1, urls.length);
+    const done = state.results.length;
+    const withData = state.results.filter(r => r.emails?.length||r.phones?.length||r.socials?.length).length;
+    document.getElementById('results-sub').textContent = `${done} scanned · ${withData} with contact data`;
+    document.getElementById('header-status-text').textContent = `${i+1} / ${urls.length} scanned`;
   }
 
+  // Done
   state.isRunning = false;
-  document.getElementById('progress-label').textContent    = 'Done!';
-  document.getElementById('header-status-text').textContent = `${urls.length} sites scanned`;
-  document.getElementById('download-btn').disabled = false;
-  document.getElementById('start-btn').disabled    = false;
-  showToast(`Scraping complete — ${urls.length} site${urls.length !== 1 ? 's' : ''} processed`, 'success');
+  document.getElementById('prog-label').textContent = 'Scan complete';
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('run-btn').innerHTML = `
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    New scan`;
+  document.getElementById('run-btn').onclick = resetToInput;
+  document.getElementById('dl-btn').disabled = false;
+  showToast(`Done — ${urls.length} site${urls.length!==1?'s':''} scanned`, 'success');
 }
 
-// ── Progress ──────────────────────────────────────────────────────
+function resetToInput() {
+  state.results = [];
+  state.isRunning = false;
+  document.getElementById('input-section').style.display = 'block';
+  document.getElementById('activity-feed').classList.remove('show');
+  document.getElementById('progress-strip').classList.remove('show');
+  document.getElementById('table-wrap').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'flex';
+  document.getElementById('results-body').innerHTML = '';
+  document.getElementById('results-sub').textContent = 'Run a scan to see results';
+  document.getElementById('header-status').classList.remove('show');
+  document.getElementById('dl-btn').disabled = true;
+  document.getElementById('run-btn').innerHTML = `
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Start scraping`;
+  document.getElementById('run-btn').onclick = startScraping;
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('feed-list').innerHTML = '';
+}
+
+// ── Progress ───────────────────────────────────────────────────────
 function updateProgress(done, total) {
-  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-  document.getElementById('progress-bar').style.width  = `${pct}%`;
-  document.getElementById('progress-count').textContent = `${done} / ${total}`;
+  const pct = total === 0 ? 0 : Math.round((done/total)*100);
+  document.getElementById('prog-fill').style.width = `${pct}%`;
+  document.getElementById('prog-count').textContent = `${done} / ${total}`;
 }
 
-// ── Results table ─────────────────────────────────────────────────
-function addResultRow(idx, url, data) {
-  const tbody = document.getElementById('results-body');
+// ── Table ──────────────────────────────────────────────────────────
+function addTableRow(idx, url, data, status) {
   const tr = document.createElement('tr');
-  tr.id = `row-${idx}`;
-  tr.className = 'row-appear';
-  tr.innerHTML = buildRowHTML(idx, url, data, 'pending');
-  tbody.appendChild(tr);
-  tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  tr.id = `row-${idx}`; tr.className = 'row-appear';
+  tr.innerHTML = buildRowHTML(idx, url, data, status);
+  document.getElementById('results-body').appendChild(tr);
+  tr.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-
-function updateResultRow(idx, url, data, status) {
+function updateTableRow(idx, url, data, status) {
   const tr = document.getElementById(`row-${idx}`);
   if (tr) tr.innerHTML = buildRowHTML(idx, url, data, status);
 }
-
 function buildRowHTML(idx, url, data, status) {
   const host = hostname(url);
-
   let badge = '';
-  if (status === 'pending') {
-    badge = `<span class="badge badge-scanning"><span class="spinner" style="width:10px;height:10px;border-width:1.5px;"></span> scanning</span>`;
-  } else if (status === 'error') {
-    badge = `<span class="badge badge-error">error</span>`;
-  } else if (data && (data.emails.length || data.phones.length || data.socials.length)) {
-    badge = `<span class="badge badge-found">found</span>`;
-  } else {
-    badge = `<span class="badge badge-empty">empty</span>`;
-  }
+  if (status==='scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
+  else if (status==='error') badge = `<span class="badge badge-error">error</span>`;
+  else if (data && (data.emails.length||data.phones.length||data.socials.length)) badge = `<span class="badge badge-found">found</span>`;
+  else badge = `<span class="badge badge-empty">empty</span>`;
 
   const emails  = data?.emails  ?? [];
   const phones  = data?.phones  ?? [];
   const socials = data?.socials ?? [];
 
-  const emailsH  = emails.length  ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`;
-  const phonesH  = phones.length  ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`;
-  const socialsH = socials.length ? socials.map(s =>
-    `<a href="${s.url}" target="_blank" class="social-a">${socialIcon(s.platform)}<span>${s.platform}</span></a>`
-  ).join('') : `<span class="muted">—</span>`;
-
   return `
     <td class="idx-cell">${idx}</td>
-    <td>
-      <a href="${url}" target="_blank" class="site-name">${host}</a>
-      <div class="site-url">${url}</div>
-    </td>
+    <td><a href="${url}" target="_blank" class="site-name">${host}</a><div class="site-url-sub">${url}</div></td>
     <td>${badge}</td>
-    <td>${emailsH}</td>
-    <td>${phonesH}</td>
-    <td>${socialsH}</td>
-  `;
+    <td>${emails.length ? emails.map(e=>`<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${phones.length ? phones.map(p=>`<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${socials.length ? socials.map(s=>`<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
 }
 
-function updateResultsSummary() {
-  const done     = state.results.length;
-  const withData = state.results.filter(r => r.emails?.length || r.phones?.length || r.socials?.length).length;
-  document.getElementById('results-summary').textContent = `${done} scanned · ${withData} with contact data`;
-}
-
-// ── Social icons ──────────────────────────────────────────────────
-function socialIcon(platform) {
-  const icons = {
-    linkedin:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>`,
-    twitter:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`,
-    facebook:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>`,
-    instagram: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>`,
-    youtube:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.57A2.78 2.78 0 0 0 3.41 19.5C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon fill="white" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>`,
-    github:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>`,
-    tiktok:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 12.67 0l-.01-8.83a8.18 8.18 0 0 0 4.78 1.52V4.55a4.85 4.85 0 0 1-1-.14z"/></svg>`,
-  };
-  return icons[platform] || '';
-}
-
-// ── Download CSV ──────────────────────────────────────────────────
+// ── Download ───────────────────────────────────────────────────────
 function downloadCSV() {
   if (!state.results.length) return;
-  const isCSVMode = state.activeTab === 'csv' && state.csvData;
-  let csv = '';
-
-  if (isCSVMode) {
-    const colIdx = parseInt(document.getElementById('url-column').value, 10);
-    csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'Social Links'].map(csvEscape).join(',') + '\n';
-    state.csvData.forEach(row => {
-      const url     = (row[colIdx] || '').trim();
-      const result  = state.results.find(r => r.url === url);
-      csv += [...row, result?.emails?.join(' | ') ?? '', result?.phones?.join(' | ') ?? '', result?.socials?.map(s => s.url).join(' | ') ?? ''].map(csvEscape).join(',') + '\n';
-    });
-  } else {
-    csv += ['URL','Emails','Phone Numbers','Social Links'].join(',') + '\n';
-    state.results.forEach(r => {
-      csv += [r.url, r.emails?.join(' | ') ?? '', r.phones?.join(' | ') ?? '', r.socials?.map(s => s.url).join(' | ') ?? ''].map(csvEscape).join(',') + '\n';
-    });
-  }
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  let csv = 'URL,Emails,Phone Numbers,Social Links\n';
+  state.results.forEach(r => {
+    csv += [r.url, r.emails?.join(' | ')??'', r.phones?.join(' | ')??'', r.socials?.map(s=>s.url).join(' | ')??''].map(csvEscape).join(',') + '\n';
+  });
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: `webtrace-${datestamp()}.csv` });
+  const a = Object.assign(document.createElement('a'), {href:url,download:`webtrace-${datestamp()}.csv`});
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+function csvEscape(v) { const s=String(v??''); return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s; }
 
-function csvEscape(val) {
-  const s = String(val ?? '');
-  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+// ── Helpers ────────────────────────────────────────────────────────
+function hostname(url) { try { return new URL(url).hostname.replace('www.',''); } catch { return url; } }
+function datestamp() { return new Date().toISOString().slice(0,10); }
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateY(6px)'; setTimeout(()=>t.remove(),300); }, 3000);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────
-function hostname(url) {
-  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
-}
-function datestamp() { return new Date().toISOString().slice(0, 10); }
-
-function showToast(msg, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(6px)'; setTimeout(() => toast.remove(), 300); }, 3000);
-}
-
-// ── Mock scraper (replace with real FastAPI call) ─────────────────
+// ── Mock scraper ───────────────────────────────────────────────────
 async function mockScrape(url) {
-  await sleep(600 + Math.random() * 1200);
-  if (Math.random() < 0.15) throw new Error('Connection timeout');
+  await sleep(700 + Math.random() * 1100);
+  if (Math.random() < 0.12) throw new Error('Timeout');
   const host = hostname(url);
   const hasEmail  = Math.random() > 0.25;
   const hasPhone  = Math.random() > 0.45;
   const numSocial = Math.floor(Math.random() * 4);
   const allSocials = [
-    { platform: 'linkedin',  url: `https://linkedin.com/company/${host}` },
-    { platform: 'twitter',   url: `https://twitter.com/${host}` },
-    { platform: 'facebook',  url: `https://facebook.com/${host}` },
-    { platform: 'instagram', url: `https://instagram.com/${host}` },
-    { platform: 'youtube',   url: `https://youtube.com/@${host}` },
-    { platform: 'github',    url: `https://github.com/${host}` },
+    {platform:'linkedin',  url:`https://linkedin.com/company/${host}`},
+    {platform:'twitter',   url:`https://twitter.com/${host}`},
+    {platform:'facebook',  url:`https://facebook.com/${host}`},
+    {platform:'instagram', url:`https://instagram.com/${host}`},
+    {platform:'github',    url:`https://github.com/${host}`},
   ];
   return {
-    emails:  hasEmail  ? [`info@${host}`, `contact@${host}`].slice(0, 1 + Math.floor(Math.random() * 2)) : [],
-    phones:  hasPhone  ? [`+1 (555) ${Math.floor(100 + Math.random()*900)}-${Math.floor(1000 + Math.random()*9000)}`] : [],
+    emails:  hasEmail ? [`info@${host}`,`contact@${host}`].slice(0,1+Math.floor(Math.random()*2)) : [],
+    phones:  hasPhone ? [`+1 (555) ${Math.floor(100+Math.random()*900)}-${Math.floor(1000+Math.random()*9000)}`] : [],
     socials: shuffle(allSocials).slice(0, numSocial),
   };
 }
-
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
   return a;
 }

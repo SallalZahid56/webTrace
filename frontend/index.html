@@ -1,149 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebTrace — Contact Data Extractor</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WebTrace — v2</title>
+<link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-  <!-- HEADER -->
-  <header>
-    <div class="header-inner">
-      <div class="logo">
-        <div class="logo-icon">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-          </svg>
-          <div class="scan-line"></div>
-        </div>
-        <span class="logo-wordmark">Web<span>Trace</span></span>
-        <span class="version-tag">v1.0</span>
-      </div>
-      <div id="header-status" class="header-status">
-        <span class="pulse-dot"></span>
-        <span id="header-status-text">Scanning…</span>
-      </div>
+<!-- HEADER -->
+<header>
+  <div class="logo-icon">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <div class="scan-line"></div>
+  </div>
+  <span class="wordmark">Web<span>Trace</span></span>
+  <span class="vtag">v2.0</span>
+  <div class="hdr-right">
+    <div id="header-status" class="status-pill">
+      <span class="pdot"></span>
+      <span id="header-status-text">Scanning…</span>
     </div>
-  </header>
+  </div>
+</header>
 
-  <!-- HERO -->
-  <section class="hero">
-    <p class="hero-eye">Contact Extraction Tool</p>
-    <h1>Turn URLs into contact data - instantly.</h1>
-    <p>Paste website URLs or upload a CSV. WebTrace visits each site and extracts public emails, phone numbers, and social media links - delivered as a ready-to-download CSV.</p>
-  </section>
+<div class="split">
 
-  <!-- MAIN -->
-  <main>
+  <!-- ── LEFT PANE ── -->
+  <div class="left-pane">
+    <div class="pane-header">
+      <div class="pane-title">New scan</div>
+      <div class="pane-sub">Paste URLs or upload a CSV</div>
+    </div>
 
-    <!-- Input Card -->
-    <div class="card">
+    <!-- Input section (shown before scan) -->
+    <div id="input-section" class="pane-body">
+      <!-- Tabs -->
       <div class="tabs">
         <button id="tab-urls" class="tab-btn active" onclick="switchTab('urls')">Paste URLs</button>
         <button id="tab-csv"  class="tab-btn"        onclick="switchTab('csv')">Upload CSV</button>
       </div>
 
-      <!-- Panel: URLs -->
-      <div id="panel-urls" class="tab-panel">
-        <label class="field-label">One URL per line - include <code>https://</code></label>
-        <textarea id="url-input" rows="7" placeholder="https://example.com&#10;https://acme.io&#10;https://startup.co"></textarea>
+      <!-- URL panel -->
+      <div id="panel-urls">
+        <div class="section-lbl">URLs — one per line</div>
+        <textarea id="url-input" rows="8" placeholder="https://example.com&#10;https://acme.io&#10;https://startup.co"></textarea>
         <div class="url-meta">
           <span id="url-count">0 URLs entered</span>
           <button onclick="clearUrls()">Clear</button>
         </div>
       </div>
 
-      <!-- Panel: CSV -->
-      <div id="panel-csv" class="tab-panel hidden">
+      <!-- CSV panel -->
+      <div id="panel-csv" class="hidden" style="display:none">
+        <div class="section-lbl">Upload CSV file</div>
         <div id="drop-zone" class="drop-zone"
           ondragover="handleDragOver(event)" ondragleave="handleDragLeave()" ondrop="handleDrop(event)"
           onclick="document.getElementById('csv-file').click()">
-          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/>
-          </svg>
-          <p>Drop your CSV here or <span>browse</span></p>
-          <p class="sub">Columns with URLs will be auto-detected</p>
-          <input id="csv-file" type="file" accept=".csv" style="display:none" onchange="handleFileUpload(event)" />
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+          <p>Drop CSV here or <span>browse</span></p>
+          <p class="sub">URL columns are auto-detected</p>
+          <input id="csv-file" type="file" accept=".csv" style="display:none" onchange="handleFileUpload(event)"/>
         </div>
-        <div id="col-selector" class="col-selector">
-          <div class="file-ok">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-            <span id="file-name-label">file.csv loaded</span>
-          </div>
-          <div>
-            <label class="field-label">Which column contains the URLs?</label>
-            <select id="url-column"></select>
-          </div>
-          <p id="csv-url-count" style="font-size:11px;color:var(--slate-400);"></p>
+        <div id="file-ok" class="file-ok">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+          <span id="file-name-label">file.csv loaded</span>
+        </div>
+        <div id="col-select" class="col-select">
+          <div class="section-lbl" style="margin-top:10px">URL column</div>
+          <select id="url-column"></select>
+          <div class="url-meta" style="margin-top:6px"><span id="csv-url-count"></span></div>
         </div>
       </div>
 
-      <!-- Options bar -->
-      <div class="options-bar">
-        <label class="chk-label">
-          <input type="checkbox" id="opt-contact-page" checked />
-          Also check <code>/contact</code> &amp; <code>/about</code>
+      <div class="divider"></div>
+
+      <!-- Options -->
+      <div class="section-lbl">Options</div>
+      <div class="opt-grid">
+        <label class="opt-tile selected" onclick="toggleTile(this)">
+          <input type="checkbox" id="opt-contact" checked/>
+          <div><div class="opt-tile-title">Contact pages</div><div class="opt-tile-desc">Also scan /contact &amp; /about</div></div>
         </label>
-        <label class="chk-label">
-          <input type="checkbox" id="opt-dedup" checked />
-          Deduplicate emails
+        <label class="opt-tile selected" onclick="toggleTile(this)">
+          <input type="checkbox" id="opt-dedup" checked/>
+          <div><div class="opt-tile-title">Deduplicate</div><div class="opt-tile-desc">Remove duplicate emails</div></div>
         </label>
-        <button id="start-btn" class="start-btn" onclick="startScraping()">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Start scraping
-        </button>
+        <label class="opt-tile selected" onclick="toggleTile(this)">
+          <input type="checkbox" id="opt-social" checked/>
+          <div><div class="opt-tile-title">Social profiles</div><div class="opt-tile-desc">LinkedIn, Twitter, GitHub…</div></div>
+        </label>
+        <label class="opt-tile" onclick="toggleTile(this)">
+          <input type="checkbox" id="opt-validate"/>
+          <div><div class="opt-tile-title">Validate emails</div><div class="opt-tile-desc">Basic format check</div></div>
+        </label>
       </div>
     </div>
 
-    <!-- Progress Card -->
-    <div id="progress-section" class="card progress-card">
-      <div class="progress-top">
-        <div class="progress-label">
-          <span class="spinner"></span>
-          <span id="progress-label">Scanning…</span>
-        </div>
-        <span id="progress-count" class="progress-count">0 / 0</span>
-      </div>
-      <div class="progress-track">
-        <div id="progress-bar" class="progress-fill"></div>
-      </div>
+    <!-- Activity feed (shown during scan) -->
+    <div id="activity-feed" class="activity-feed pane-body" style="flex:1;overflow-y:auto">
+      <div class="feed-title">Scan activity</div>
+      <div id="feed-list"></div>
     </div>
 
-    <!-- Results Card -->
-    <div id="results-section" class="card results-card">
-      <div class="results-hdr">
-        <div>
-          <h2>Results</h2>
-          <p id="results-summary" class="results-summary">—</p>
-        </div>
-        <button id="download-btn" class="dl-btn" onclick="downloadCSV()" disabled>
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
-          </svg>
-          Download CSV
-        </button>
+    <div class="pane-footer">
+      <button id="run-btn" class="run-btn" onclick="startScraping()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Start scraping
+      </button>
+    </div>
+  </div>
+
+  <!-- ── RIGHT PANE ── -->
+  <div class="right-pane">
+    <div class="right-hdr">
+      <div>
+        <div class="right-title">Results</div>
+        <div id="results-sub" class="right-sub">Run a scan to see results</div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:36px">#</th>
-              <th style="min-width:170px">Website</th>
-              <th>Status</th>
-              <th style="min-width:190px">Emails</th>
-              <th style="min-width:130px">Phone</th>
-              <th style="min-width:190px">Social</th>
-            </tr>
-          </thead>
-          <tbody id="results-body"></tbody>
-        </table>
-      </div>
+      <button id="dl-btn" class="dl-btn" onclick="downloadCSV()" disabled>
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+        Download CSV
+      </button>
     </div>
 
-  </main>
+    <!-- Progress strip -->
+    <div id="progress-strip" class="progress-strip">
+      <div class="spinner"></div>
+      <span id="prog-label" class="prog-label">Scanning…</span>
+      <div class="prog-track"><div id="prog-fill" class="prog-fill"></div></div>
+      <span id="prog-count" class="prog-count">0 / 0</span>
+    </div>
 
-  <script src="app.js"></script>
+    <!-- Empty state -->
+    <div id="empty-state" class="empty-state">
+      <svg fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <p>No results yet</p>
+      <small>Paste some URLs on the left and hit Start scraping — results will appear here in real time.</small>
+    </div>
+
+    <!-- Table -->
+    <div id="table-wrap" class="table-wrap" style="display:none">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34px">#</th>
+            <th style="min-width:150px">Website</th>
+            <th>Status</th>
+            <th style="min-width:180px">Emails</th>
+            <th style="min-width:120px">Phone</th>
+            <th style="min-width:160px">Social</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
