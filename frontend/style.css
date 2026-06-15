@@ -1,0 +1,68 @@
+body { background-color: #0f172a; }
+
+    /* Subtle grid background */
+    .bg-grid {
+      background-image:
+        linear-gradient(rgba(14,165,233,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(14,165,233,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* Animated scan line on logo */
+    @keyframes scan {
+      0%   { transform: translateY(-100%); opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { transform: translateY(400%); opacity: 0; }
+    }
+    .scan-line {
+      animation: scan 2.8s ease-in-out infinite;
+    }
+
+    /* Pulse dot */
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+    .pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+    /* Row fade-in */
+    @keyframes rowIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .row-appear { animation: rowIn 0.3s ease forwards; }
+
+    /* Tab active underline */
+    .tab-active {
+      border-bottom: 2px solid #0ea5e9;
+      color: #e2e8f0;
+    }
+    .tab-inactive {
+      border-bottom: 2px solid transparent;
+      color: #64748b;
+    }
+    .tab-inactive:hover { color: #94a3b8; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    /* Status badges */
+    .badge-success { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .badge-partial { background: rgba(234,179,8,0.12); color: #facc15; }
+    .badge-error   { background: rgba(239,68,68,0.12); color: #f87171; }
+    .badge-pending { background: rgba(100,116,139,0.12); color: #94a3b8; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 0.8s linear infinite; }
+
+    /* Progress bar fill */
+    @keyframes progressFill {
+      from { width: 0%; }
+    }
+    #progress-bar { transition: width 0.4s ease; }
+
+    textarea:focus, input:focus { outline: none; }
