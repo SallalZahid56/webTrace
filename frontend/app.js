@@ -8,6 +8,8 @@ const state = {
   csvHeaders: [],
   results: [],
   isRunning: false,
+  stopRequested: false,
+  abortController: null,
 };
 
 // ── Tab switching ──────────────────────────────────────────────────
