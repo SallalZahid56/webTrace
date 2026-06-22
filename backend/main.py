@@ -80,3 +80,33 @@ async def google_search(req: GoogleSearchRequest):
         "results": data.get("results", []),
         "error":   data.get("error"),
     }
+
+
+@app.post("/google-search-debug")
+async def google_search_debug(req: GoogleSearchRequest):
+    from google_scraper import fetch_ddg_html
+    import httpx, random
+    from google_scraper import USER_AGENTS
+
+    headers = {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+    }
+
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        resp = await client.post(
+            "https://html.duckduckgo.com/html/",
+            headers=headers,
+            data={"q": req.query, "kl": "us-en"},
+        )
+
+    html = resp.text
+    return {
+        "status_code": resp.status_code,
+        "length": len(html),
+        "preview": html[:2000],
+        "has_captcha": "captcha" in html.lower(),
+        "has_results": "result__a" in html or "result__snippet" in html,
+    }
