@@ -13,10 +13,31 @@ const state = {
 // ── Tab switching ──────────────────────────────────────────────────
 function switchTab(tab) {
   state.activeTab = tab;
+
+  // Toggle tab buttons
   document.getElementById('tab-urls').classList.toggle('active', tab === 'urls');
-  document.getElementById('tab-csv').classList.toggle('active', tab === 'csv');
-  document.getElementById('panel-urls').style.display = tab === 'urls' ? 'block' : 'none';
-  document.getElementById('panel-csv').style.display  = tab === 'csv'  ? 'block' : 'none';
+  document.getElementById('tab-csv').classList.toggle('active',  tab === 'csv');
+  document.getElementById('tab-google').classList.toggle('active', tab === 'google');
+
+  // Toggle panels
+  document.getElementById('panel-urls').style.display   = tab === 'urls'   ? 'block' : 'none';
+  document.getElementById('panel-csv').style.display    = tab === 'csv'    ? 'block' : 'none';
+  document.getElementById('panel-google').style.display = tab === 'google' ? 'block' : 'none';
+
+  // Hide options section in Google mode (it has its own settings)
+  document.getElementById('options-section').style.display = tab === 'google' ? 'none' : 'block';
+
+  // Update run button label
+  const runBtn = document.getElementById('run-btn');
+  if (tab === 'google') {
+    runBtn.innerHTML = `
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      Search & scrape`;
+  } else {
+    runBtn.innerHTML = `
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Start scraping`;
+  }
 }
 
 // ── URL input ──────────────────────────────────────────────────────
