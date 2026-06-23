@@ -244,6 +244,7 @@ async function startScraping() {
   document.getElementById('progress-strip').classList.add('show');
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('table-wrap').style.display = 'block';
+  buildTableHead(state.activeTab);
   document.getElementById('results-body').innerHTML = '';
 
   // Pre-populate feed with all URLs as idle
@@ -322,6 +323,22 @@ function updateProgress(done, total) {
   const pct = total === 0 ? 0 : Math.round((done/total)*100);
   document.getElementById('prog-fill').style.width = `${pct}%`;
   document.getElementById('prog-count').textContent = `${done} / ${total}`;
+}
+
+// ── Table headers ──────────────────────────────────────────────────
+function buildTableHead(mode) {
+  const head = document.getElementById('table-head');
+  if (!head) return;
+
+  let cols = [];
+
+  if (mode === 'google') {
+    cols = ['#', 'Business', 'Website', 'Status', 'Emails', 'Phones', 'Socials'];
+  } else {
+    cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'Socials'];
+  }
+
+  head.innerHTML = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
 }
 
 // ── Table ──────────────────────────────────────────────────────────
