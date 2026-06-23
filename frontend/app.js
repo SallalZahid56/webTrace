@@ -465,6 +465,54 @@ function updateTableRow(idx, url, data, status) {
   const tr = document.getElementById(`row-${idx}`);
   if (tr) tr.innerHTML = buildRowHTML(idx, url, data, status);
 }
+
+// ── Google-mode table rows ─────────────────────────────────────────
+function addGoogleTableRow(idx, biz, scrapeData, status) {
+  const tr = document.createElement('tr');
+  tr.id = `row-${idx}`; tr.className = 'row-appear';
+  tr.innerHTML = buildGoogleRowHTML(idx, biz, scrapeData, status);
+  document.getElementById('results-body').appendChild(tr);
+  tr.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function updateGoogleTableRow(idx, biz, status) {
+  const tr = document.getElementById(`row-${idx}`);
+  if (tr) tr.innerHTML = buildGoogleRowHTML(idx, biz, biz, status);
+}
+
+function buildGoogleRowHTML(idx, biz, scrapeData, status) {
+  const url     = biz.website || '';
+  const host    = hostname(url);
+  const name    = biz.name || host;
+  const desc    = biz.description ? `<div class="site-url-sub" style="max-width:200px;white-space:normal;line-height:1.4;margin-top:2px">${biz.description.slice(0, 80)}…</div>` : '';
+
+  const emails  = scrapeData?.emails  ?? [];
+  const phones  = scrapeData?.phones  ?? [];
+  const socials = scrapeData?.socials ?? [];
+
+  let badge = '';
+  if (status === 'scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
+  else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
+  else if (emails.length || phones.length || socials.length) badge = `<span class="badge badge-found">found</span>`;
+  else badge = `<span class="badge badge-empty">empty</span>`;
+
+  return `
+    <td class="idx-cell">${idx}</td>
+    <td>
+      <div style="font-size:12px;font-weight:500;color:var(--slate-800)">${name}</div>
+      ${desc}
+    </td>
+    <td>
+      <a href="${url}" target="_blank" class="site-name">${host}</a>
+      <div class="site-url-sub">${url}</div>
+    </td>
+    <td>${badge}</td>
+    <td>${emails.length  ? emails.map(e  => `<span class="data-mono">${e}</span>`).join('')         : `<span class="muted">—</span>`}</td>
+    <td>${phones.length  ? phones.map(p  => `<span class="data-mono">${p}</span>`).join('')         : `<span class="muted">—</span>`}</td>
+    <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
+}
+
+
 function buildRowHTML(idx, url, data, status) {
   const host = hostname(url);
   let badge = '';
