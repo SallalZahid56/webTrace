@@ -538,31 +538,47 @@ function buildRowHTML(idx, url, data, status) {
 function downloadCSV() {
   if (!state.results.length) return;
 
-  const isCSVMode = state.activeTab === 'csv' && state.csvData;
   let csv = '';
 
-  if (isCSVMode) {
-    // Enrich mode — append columns to original CSV
+  if (state.activeTab === 'google') {
+    // Google mode — business name, website, description, contacts
+    csv += ['Business Name', 'Website', 'Description', 'Emails', 'Phone Numbers', 'Social Links']
+      .map(csvEscape).join(',') + '\n';
+    state.results.forEach(r => {
+      csv += [
+        r.name        ?? '',
+        r.website     ?? '',
+        r.description ?? '',
+        r.emails?.join(' | ')              ?? '',
+        r.phones?.join(' | ')              ?? '',
+        r.socials?.map(s => s.url).join(' | ') ?? '',
+      ].map(csvEscape).join(',') + '\n';
+    });
+
+  } else if (state.activeTab === 'csv' && state.csvData) {
+    // CSV enrich mode — append columns to original CSV
     const colIdx = parseInt(document.getElementById('url-column').value, 10);
-    csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'Social Links'].map(csvEscape).join(',') + '\n';
+    csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'Social Links']
+      .map(csvEscape).join(',') + '\n';
     state.csvData.forEach(row => {
       const url    = (row[colIdx] || '').trim();
       const result = state.results.find(r => r.url === url);
       csv += [
         ...row,
-        result?.emails?.join(' | ')  ?? '',
-        result?.phones?.join(' | ')  ?? '',
+        result?.emails?.join(' | ')              ?? '',
+        result?.phones?.join(' | ')              ?? '',
         result?.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
+
   } else {
-    // Fresh CSV — URL + extracted data
-    csv += 'URL,Emails,Phone Numbers,Social Links\n';
+    // URL mode — fresh CSV
+    csv += ['URL', 'Emails', 'Phone Numbers', 'Social Links'].map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
       csv += [
         r.url,
-        r.emails?.join(' | ')  ?? '',
-        r.phones?.join(' | ')  ?? '',
+        r.emails?.join(' | ')              ?? '',
+        r.phones?.join(' | ')              ?? '',
         r.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
@@ -570,10 +586,15 @@ function downloadCSV() {
 
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url  = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), {href:url, download:`webtrace-${datestamp()}.csv`});
+  const a    = Object.assign(document.createElement('a'), {
+    href: url,
+    download: `webtrace-${state.activeTab}-${datestamp()}.csv`,
+  });
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+
 function csvEscape(v) {
   const s = String(v ?? '');
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
