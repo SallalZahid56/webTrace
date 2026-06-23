@@ -255,3 +255,74 @@ tbody td{padding:11px 16px;vertical-align:top;line-height:1.5}
 }
 .stop-btn:hover { background: rgba(239, 68, 68, 0.08); }
 .stop-btn svg { width: 14px; height: 14px; }
+
+
+/* ── Google Search panel ── */
+.google-query-input {
+  width: 100%;
+  background: var(--white);
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--slate-700);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.google-query-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+}
+.google-query-input::placeholder {
+  color: var(--slate-300);
+}
+
+/* Number of results chips */
+.num-results-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.num-chip {
+  flex: 1;
+  padding: 7px 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--slate-500);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+  text-align: center;
+}
+.num-chip:hover {
+  border-color: var(--blue-mid);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.num-chip.active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+/* Info banner */
+.google-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--blue-soft);
+  border: 1px solid var(--blue-mid);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--slate-600);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+.google-info-banner strong {
+  color: var(--slate-800);
+}
