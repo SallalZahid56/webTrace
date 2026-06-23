@@ -218,10 +218,19 @@ function buildFeedItem(idx, url, status, data) {
 // ── Main scraping loop ─────────────────────────────────────────────
 async function startScraping() {
   if (state.isRunning) return;
+
+  // ── Google mode ──
+  if (state.activeTab === 'google') {
+    const query = document.getElementById('google-query').value.trim();
+    if (!query) { showToast('Please enter a search query.', 'error'); return; }
+    await startGoogleFlow(query);
+    return;
+  }
+
+  // ── URL / CSV mode ──
   const urls = collectUrls();
   if (!urls.length) { showToast('No valid URLs found. Add URLs starting with https://', 'error'); return; }
 
-  // Check backend is reachable before starting
   try {
     const ping = await fetch(`${API_BASE}/`);
     if (!ping.ok) throw new Error();
@@ -233,21 +242,18 @@ async function startScraping() {
   state.isRunning = true;
   state.results   = [];
 
-  // Switch left pane to feed view
   document.getElementById('input-section').style.display = 'none';
   document.getElementById('activity-feed').classList.add('show');
   document.getElementById('run-btn').disabled = true;
   document.getElementById('header-status').classList.add('show');
   document.getElementById('header-status-text').textContent = `0 / ${urls.length} scanned`;
 
-  // Show progress strip + table
   document.getElementById('progress-strip').classList.add('show');
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('table-wrap').style.display = 'block';
   buildTableHead(state.activeTab);
   document.getElementById('results-body').innerHTML = '';
 
-  // Pre-populate feed with all URLs as idle
   const feedList = document.getElementById('feed-list');
   feedList.innerHTML = '';
   urls.forEach((url, i) => {
@@ -257,7 +263,6 @@ async function startScraping() {
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
 
-    // Mark as active in feed
     document.getElementById(`feed-${i+1}`).outerHTML = buildFeedItem(i+1, url, 'pending', null);
     document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth', block:'nearest'});
 
@@ -280,13 +285,120 @@ async function startScraping() {
     }
 
     updateProgress(i+1, urls.length);
-    const done = state.results.length;
+    const done     = state.results.length;
     const withData = state.results.filter(r => r.emails?.length||r.phones?.length||r.socials?.length).length;
     document.getElementById('results-sub').textContent = `${done} scanned · ${withData} with contact data`;
     document.getElementById('header-status-text').textContent = `${i+1} / ${urls.length} scanned`;
   }
 
-  // Done
+  finishScan(urls.length);
+}
+
+// ── Google two-phase flow ──────────────────────────────────────────
+async function startGoogleFlow(query) {
+  const numResults = parseInt(document.getElementById('google-num-results').value, 10);
+
+  try {
+    const ping = await fetch(`${API_BASE}/`);
+    if (!ping.ok) throw new Error();
+  } catch {
+    showToast('Cannot reach backend. Is uvicorn running on port 8000?', 'error');
+    return;
+  }
+
+  state.isRunning = true;
+  state.results   = [];
+
+  // Switch UI to scan mode
+  document.getElementById('input-section').style.display = 'none';
+  document.getElementById('activity-feed').classList.add('show');
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('header-status').classList.add('show');
+  document.getElementById('header-status-text').textContent = 'Searching…';
+  document.getElementById('progress-strip').classList.add('show');
+  document.getElementById('prog-label').textContent = `Searching DuckDuckGo for "${query}"…`;
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('table-wrap').style.display = 'block';
+  buildTableHead('google');
+  document.getElementById('results-body').innerHTML = '';
+  document.getElementById('feed-list').innerHTML = '';
+
+  // ── Phase A: DuckDuckGo search ──
+  let searchResults = [];
+  try {
+    const res  = await fetch(`${API_BASE}/google-search`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ query, num_results: numResults }),
+    });
+    const data = await res.json();
+    if (data.error && !data.results?.length) {
+      showToast(`Search error: ${data.error}`, 'error');
+      resetToInput();
+      return;
+    }
+    searchResults = data.results || [];
+  } catch(err) {
+    showToast('Failed to reach search endpoint.', 'error');
+    resetToInput();
+    return;
+  }
+
+  if (!searchResults.length) {
+    showToast('No results found for that query.', 'error');
+    resetToInput();
+    return;
+  }
+
+  // Pre-populate feed
+  const feedList = document.getElementById('feed-list');
+  searchResults.forEach((r, i) => {
+    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i+1, r.website, 'idle', null));
+  });
+
+  document.getElementById('header-status-text').textContent = `0 / ${searchResults.length} scraped`;
+
+  // ── Phase B: scrape each website for contacts ──
+  for (let i = 0; i < searchResults.length; i++) {
+    const biz = searchResults[i];
+    const url = biz.website;
+
+    const feedEl = document.getElementById(`feed-${i+1}`);
+    if (feedEl) feedEl.outerHTML = buildFeedItem(i+1, url, 'pending', null);
+    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    document.getElementById('prog-label').textContent = `Scraping ${hostname(url)}…`;
+    document.getElementById('header-status-text').textContent = `${i+1} / ${searchResults.length} scraping`;
+    updateProgress(i, searchResults.length);
+    addGoogleTableRow(i+1, biz, null, 'scanning');
+
+    try {
+      const scrapeData = await scrapeUrl(url);
+      const merged = { ...biz, ...scrapeData };
+      state.results.push(merged);
+      updateGoogleTableRow(i+1, merged, 'done');
+      const el = document.getElementById(`feed-${i+1}`);
+      if (el) el.outerHTML = buildFeedItem(i+1, url, 'done', scrapeData);
+    } catch(err) {
+      const merged = { ...biz, emails:[], phones:[], socials:[], error: err.message };
+      state.results.push(merged);
+      updateGoogleTableRow(i+1, merged, 'error');
+      const el = document.getElementById(`feed-${i+1}`);
+      if (el) el.outerHTML = buildFeedItem(i+1, url, 'error', null);
+    }
+
+    updateProgress(i+1, searchResults.length);
+    const done     = state.results.length;
+    const withData = state.results.filter(r => r.emails?.length||r.phones?.length||r.socials?.length).length;
+    document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
+    document.getElementById('header-status-text').textContent = `${i+1} / ${searchResults.length} scraped`;
+  }
+
+  finishScan(searchResults.length);
+}
+
+// ── Shared finish helper ───────────────────────────────────────────
+function finishScan(total) {
   state.isRunning = false;
   document.getElementById('prog-label').textContent = 'Scan complete';
   document.getElementById('run-btn').disabled = false;
@@ -295,7 +407,7 @@ async function startScraping() {
     New scan`;
   document.getElementById('run-btn').onclick = resetToInput;
   document.getElementById('dl-btn').disabled = false;
-  showToast(`Done — ${urls.length} site${urls.length!==1?'s':''} scanned`, 'success');
+  showToast(`Done — ${total} site${total!==1?'s':''} scraped`, 'success');
 }
 
 function resetToInput() {
