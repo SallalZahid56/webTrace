@@ -58,6 +58,7 @@ Base URL (development): `http://127.0.0.1:8000`
 
 - `GET /` — health/status
 - `POST /scrape` — run a scrape
+- `POST /search` — search (DuckDuckGo) + scrape results (see Google/DuckDuckGo flow)
 
 Request JSON for `/scrape`:
 
@@ -85,6 +86,47 @@ Example curl call:
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/scrape" -H "Content-Type: application/json" -d '{"url":"https://example.com"}'
+
+### Search + scrape (Google-style flow)
+
+The project includes a search flow (implemented using `backend/google_scraper.py`) that performs an HTML search query against DuckDuckGo, then scrapes each returned website for contact data using the same scraping logic in `scraper.py`.
+
+Endpoint: `POST /search`
+
+Request JSON:
+
+```json
+{
+  "query": "Plumbers in Houston TX",
+  "num_results": 10,
+  "check_contact_page": true,
+  "deduplicate_emails": true
+}
+```
+
+Response (summary):
+
+```json
+{
+  "results": [
+    {
+      "name": "Example Business",
+      "website": "https://example.com",
+      "description": "...",
+      "emails": ["info@example.com"],
+      "phones": ["+1-555-555-5555"],
+      "socials": [{"platform":"twitter","url":"https://twitter.com/example"}],
+      "error": null
+    }
+  ],
+  "error": null
+}
+```
+
+Notes:
+- The current `google_scraper.py` fetches HTML results from DuckDuckGo's lightweight HTML endpoint and parses result blocks; the filename contains "google" for historical reasons.
+- Be mindful of rate limits and blocking when running many queries; the scraper adds small delays and rotates user agents, but abusing search endpoints may trigger CAPTCHAs or blocks.
+- Respect robots.txt and the target sites' terms of service when scraping.
 ```
 
 ## Troubleshooting: Pylance "Import could not be resolved"
