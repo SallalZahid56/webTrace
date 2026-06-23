@@ -55,6 +55,37 @@ function parseUrlText(text) {
     .filter(l => l.startsWith('http://') || l.startsWith('https://'));
 }
 
+// ── Google Search UI ───────────────────────────────────────────────
+function updateGoogleMeta() {
+  const query = document.getElementById('google-query').value.trim();
+  const hint  = document.getElementById('google-query-hint');
+  const num   = parseInt(document.getElementById('google-num-results').value, 10);
+
+  if (!query) {
+    hint.textContent = 'Type a business + location';
+    return;
+  }
+
+  const wordCount = query.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 2) {
+    hint.textContent = 'Try adding a location — e.g. "Plumbers in Houston TX"';
+    return;
+  }
+
+  hint.textContent = `Will search DuckDuckGo for "${query}" · scrape top ${num} sites`;
+}
+
+function setNumResults(btn) {
+  // Remove active from all chips
+  document.querySelectorAll('.num-chip').forEach(c => c.classList.remove('active'));
+  // Set active on clicked chip
+  btn.classList.add('active');
+  // Update hidden input
+  document.getElementById('google-num-results').value = btn.dataset.val;
+  // Refresh hint text
+  updateGoogleMeta();
+}
+
 // ── Option tiles ───────────────────────────────────────────────────
 function toggleTile(label) {
   const cb = label.querySelector('input[type="checkbox"]');
