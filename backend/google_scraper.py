@@ -137,7 +137,7 @@ def parse_ddg_results(html: str, max_results: int) -> list[dict]:
             block.select_one("a.result__snippet") or
             block.select_one("div.result__snippet")
         )
-        if snippet_el:
+        if snippet_el:  
             item["description"] = snippet_el.get_text(separator=" ", strip=True)
 
         # Try to pull a rating from the snippet if present
