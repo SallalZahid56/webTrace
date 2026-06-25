@@ -1,9 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from scraper import scrape_url
-from google_scraper import search_google
+from maps_scraper import scrape_maps, is_valid_maps_url
 
 app = FastAPI(title="WebTrace API", version="2.0.0")
 
@@ -33,24 +33,24 @@ class ScrapeResponse(BaseModel):
     socials: List[SocialLink]
     error: Optional[str] = None
 
-# ── NEW: Google Search models ──────────────────────────────────────
+# ── Maps models ───────────────────────────────────────────────────
 
-class GoogleSearchRequest(BaseModel):
-    query: str
-    num_results: int = 10
+class MapsRequest(BaseModel):
+    url: str
+    max_results: int = 20
 
-class BusinessResult(BaseModel):
-    name: str
-    website: str
+class MapsBusinessResult(BaseModel):
+    name:    str
     address: str
-    rating: str
+    phone:   str
+    rating:  str
     reviews: str
-    description: str
+    website: str
 
-class GoogleSearchResponse(BaseModel):
-    query: str
-    results: List[BusinessResult]
-    error: Optional[str] = None
+class MapsResponse(BaseModel):
+    url:     str
+    results: List[MapsBusinessResult]
+    error:   Optional[str] = None
 
 # ── Routes ────────────────────────────────────────────────────────
 
@@ -67,46 +67,25 @@ async def scrape(req: ScrapeRequest):
     )
     return result
 
-# ── NEW: Google Search endpoint ────────────────────────────────────
+# ── Maps scrape endpoint ───────────────────────────────────────────
 
-@app.post("/google-search", response_model=GoogleSearchResponse)
-async def google_search(req: GoogleSearchRequest):
-    data = await search_google(
-        query=req.query,
-        num_results=req.num_results,
-    )
-    return {
-        "query":   req.query,
-        "results": data.get("results", []),
-        "error":   data.get("error"),
-    }
+@app.post("/maps-scrape", response_model=MapsResponse)
+async def maps_scrape(req: MapsRequest):
 
-
-@app.post("/google-search-debug")
-async def google_search_debug(req: GoogleSearchRequest):
-    from google_scraper import fetch_ddg_html
-    import httpx, random
-    from google_scraper import USER_AGENTS
-
-    headers = {
-        "User-Agent": random.choice(USER_AGENTS),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate",
-    }
-
-    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-        resp = await client.post(
-            "https://html.duckduckgo.com/html/",
-            headers=headers,
-            data={"q": req.query, "kl": "us-en"},
+    # Validate URL before launching Playwright
+    if not is_valid_maps_url(req.url):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid Google Maps URL. Make sure it contains 'google.com/maps'.",
         )
 
-    html = resp.text
+    data = await scrape_maps(
+        url=req.url,
+        max_results=req.max_results,
+    )
+
     return {
-        "status_code": resp.status_code,
-        "length": len(html),
-        "preview": html[:2000],
-        "has_captcha": "captcha" in html.lower(),
-        "has_results": "result__a" in html or "result__snippet" in html,
+        "url":     req.url,
+        "results": data.get("results", []),
+        "error":   data.get("error"),
     }
