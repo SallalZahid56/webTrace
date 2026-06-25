@@ -10,29 +10,35 @@ const state = {
   isRunning: false,
 };
 
-// ── Tab switching ──────────────────────────────────────────────────
 function switchTab(tab) {
   state.activeTab = tab;
 
   // Toggle tab buttons
-  document.getElementById('tab-urls').classList.toggle('active', tab === 'urls');
-  document.getElementById('tab-csv').classList.toggle('active',  tab === 'csv');
-  document.getElementById('tab-google').classList.toggle('active', tab === 'google');
+  document.getElementById('tab-urls').classList.toggle('active',    tab === 'urls');
+  document.getElementById('tab-csv').classList.toggle('active',     tab === 'csv');
+  document.getElementById('tab-google').classList.toggle('active',  tab === 'google');
+  document.getElementById('tab-maps').classList.toggle('active',    tab === 'maps');
 
   // Toggle panels
-  document.getElementById('panel-urls').style.display   = tab === 'urls'   ? 'block' : 'none';
-  document.getElementById('panel-csv').style.display    = tab === 'csv'    ? 'block' : 'none';
-  document.getElementById('panel-google').style.display = tab === 'google' ? 'block' : 'none';
+  document.getElementById('panel-urls').style.display    = tab === 'urls'   ? 'block' : 'none';
+  document.getElementById('panel-csv').style.display     = tab === 'csv'    ? 'block' : 'none';
+  document.getElementById('panel-google').style.display  = tab === 'google' ? 'block' : 'none';
+  document.getElementById('panel-maps').style.display    = tab === 'maps'   ? 'block' : 'none';
 
-  // Hide options section in Google mode (it has its own settings)
-  document.getElementById('options-section').style.display = tab === 'google' ? 'none' : 'block';
+  // Hide options section in Google and Maps mode
+  const showOptions = tab === 'urls' || tab === 'csv';
+  document.getElementById('options-section').style.display = showOptions ? 'block' : 'none';
 
-  // Update run button label
+  // Update run button label per tab
   const runBtn = document.getElementById('run-btn');
   if (tab === 'google') {
     runBtn.innerHTML = `
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       Search & scrape`;
+  } else if (tab === 'maps') {
+    runBtn.innerHTML = `
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/></svg>
+      Scrape Maps`;
   } else {
     runBtn.innerHTML = `
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -84,6 +90,39 @@ function setNumResults(btn) {
   document.getElementById('google-num-results').value = btn.dataset.val;
   // Refresh hint text
   updateGoogleMeta();
+}
+
+
+// ── Maps UI ────────────────────────────────────────────────────────
+function updateMapsMeta() {
+  const val     = document.getElementById('maps-url-input').value.trim();
+  const hint    = document.getElementById('maps-url-hint');
+  const okEl    = document.getElementById('maps-url-ok');
+  const errEl   = document.getElementById('maps-url-err');
+
+  if (!val) {
+    hint.textContent = 'Paste a Google Maps search results URL';
+    okEl.style.display  = 'none';
+    errEl.style.display = 'none';
+    return;
+  }
+
+  const isValid = val.includes('google.com/maps') || val.includes('maps.google.com');
+
+  okEl.style.display  = isValid ? 'flex' : 'none';
+  errEl.style.display = isValid ? 'none' : 'flex';
+
+  const num = parseInt(document.getElementById('maps-max-results').value, 10);
+  hint.textContent = isValid
+    ? `Will scrape up to ${num} businesses from this Maps page`
+    : 'URL must contain google.com/maps';
+}
+
+function setMapsMaxResults(btn) {
+  document.querySelectorAll('#panel-maps .num-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('maps-max-results').value = btn.dataset.val;
+  updateMapsMeta();
 }
 
 // ── Option tiles ───────────────────────────────────────────────────
@@ -215,6 +254,179 @@ function buildFeedItem(idx, url, status, data) {
     </div>`;
 }
 
+
+// ── Maps flow ──────────────────────────────────────────────────────
+async function startMapsFlow(mapsUrl) {
+  const maxResults = parseInt(document.getElementById('maps-max-results').value, 10);
+
+  try {
+    const ping = await fetch(`${API_BASE}/`);
+    if (!ping.ok) throw new Error();
+  } catch {
+    showToast('Cannot reach backend. Is uvicorn running on port 8000?', 'error');
+    return;
+  }
+
+  state.isRunning = true;
+  state.results   = [];
+
+  // Switch UI to scan mode
+  document.getElementById('input-section').style.display = 'none';
+  document.getElementById('activity-feed').classList.add('show');
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('header-status').classList.add('show');
+  document.getElementById('header-status-text').textContent = 'Loading Maps…';
+  document.getElementById('progress-strip').classList.add('show');
+  document.getElementById('prog-label').textContent = 'Launching browser & loading Maps page…';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('table-wrap').style.display = 'block';
+  buildTableHead('maps');
+  document.getElementById('results-body').innerHTML = '';
+  document.getElementById('feed-list').innerHTML = '';
+
+  // ── Phase A: scrape Maps listings via Playwright ──
+  let listings = [];
+  try {
+    const res  = await fetch(`${API_BASE}/maps-scrape`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ url: mapsUrl, max_results: maxResults }),
+    });
+    const data = await res.json();
+
+    if (data.error && !data.results?.length) {
+      showToast(`Maps error: ${data.error}`, 'error');
+      resetToInput();
+      return;
+    }
+    listings = data.results || [];
+  } catch(err) {
+    showToast('Failed to reach maps-scrape endpoint.', 'error');
+    resetToInput();
+    return;
+  }
+
+  if (!listings.length) {
+    showToast('No businesses found on that Maps page.', 'error');
+    resetToInput();
+    return;
+  }
+
+  // Pre-populate feed with all listings as idle
+  const feedList = document.getElementById('feed-list');
+  listings.forEach((biz, i) => {
+    const label = biz.website || biz.name || `Business ${i+1}`;
+    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i+1, label, 'idle', null));
+  });
+
+  document.getElementById('header-status-text').textContent = `0 / ${listings.length} scraped`;
+
+  // ── Phase B: scrape each business website for emails + socials ──
+  for (let i = 0; i < listings.length; i++) {
+    const biz = listings[i];
+    const url = biz.website || '';
+    const label = url || biz.name || `Business ${i+1}`;
+
+    const feedEl = document.getElementById(`feed-${i+1}`);
+    if (feedEl) feedEl.outerHTML = buildFeedItem(i+1, label, 'pending', null);
+    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    document.getElementById('prog-label').textContent = `Scraping ${biz.name || hostname(url)}…`;
+    document.getElementById('header-status-text').textContent = `${i+1} / ${listings.length} scraping`;
+    updateProgress(i, listings.length);
+    addMapsTableRow(i+1, biz, null, 'scanning');
+
+    // Only scrape website if one exists
+    if (url) {
+      try {
+        const scrapeData = await scrapeUrl(url);
+        const merged = { ...biz, emails: scrapeData.emails, phones: scrapeData.phones, socials: scrapeData.socials };
+        state.results.push(merged);
+        updateMapsTableRow(i+1, merged, 'done');
+        const el = document.getElementById(`feed-${i+1}`);
+        if (el) el.outerHTML = buildFeedItem(i+1, label, 'done', scrapeData);
+      } catch(err) {
+        const merged = { ...biz, emails:[], phones:[], socials:[], error: err.message };
+        state.results.push(merged);
+        updateMapsTableRow(i+1, merged, 'error');
+        const el = document.getElementById(`feed-${i+1}`);
+        if (el) el.outerHTML = buildFeedItem(i+1, label, 'error', null);
+      }
+    } else {
+      // No website — still show the Maps data we have
+      const merged = { ...biz, emails:[], phones:[], socials:[] };
+      state.results.push(merged);
+      updateMapsTableRow(i+1, merged, 'done');
+      const el = document.getElementById(`feed-${i+1}`);
+      if (el) el.outerHTML = buildFeedItem(i+1, label, 'done', { emails:[], phones:[], socials:[] });
+    }
+
+    updateProgress(i+1, listings.length);
+    const done     = state.results.length;
+    const withData = state.results.filter(r =>
+      r.emails?.length || r.phones?.length || r.socials?.length || r.phone
+    ).length;
+    document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
+    document.getElementById('header-status-text').textContent = `${i+1} / ${listings.length} scraped`;
+  }
+
+  finishScan(listings.length);
+}
+
+// ── Maps table rows ────────────────────────────────────────────────
+function addMapsTableRow(idx, biz, scrapeData, status) {
+  const tr = document.createElement('tr');
+  tr.id = `row-${idx}`; tr.className = 'row-appear';
+  tr.innerHTML = buildMapsRowHTML(idx, biz, scrapeData, status);
+  document.getElementById('results-body').appendChild(tr);
+  tr.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function updateMapsTableRow(idx, biz, status) {
+  const tr = document.getElementById(`row-${idx}`);
+  if (tr) tr.innerHTML = buildMapsRowHTML(idx, biz, biz, status);
+}
+
+function buildMapsRowHTML(idx, biz, scrapeData, status) {
+  const url     = biz.website || '';
+  const name    = biz.name    || '—';
+  const address = biz.address || '—';
+  const phone   = biz.phone   || '';
+  const rating  = biz.rating  ? `⭐ ${biz.rating}` : '—';
+  const reviews = biz.reviews ? `(${biz.reviews})` : '';
+
+  const emails  = scrapeData?.emails  ?? [];
+  const socials = scrapeData?.socials ?? [];
+
+  // Phone: prefer Maps phone, fallback to scraped phones
+  const phones  = phone
+    ? [phone]
+    : (scrapeData?.phones ?? []);
+
+  let badge = '';
+  if (status === 'scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
+  else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
+  else if (emails.length || phones.length || socials.length) badge = `<span class="badge badge-found">found</span>`;
+  else badge = `<span class="badge badge-empty">empty</span>`;
+
+  const websiteCell = url
+    ? `<a href="${url}" target="_blank" class="site-name">${hostname(url)}</a><div class="site-url-sub">${url}</div>`
+    : `<span class="muted">No website</span>`;
+
+  return `
+    <td class="idx-cell">${idx}</td>
+    <td>
+      <div style="font-size:12px;font-weight:500;color:var(--slate-800)">${name}</div>
+      <div class="site-url-sub" style="margin-top:2px">${address}</div>
+    </td>
+    <td><span style="font-size:11px;color:var(--slate-600)">${rating} ${reviews}</span></td>
+    <td>${websiteCell}</td>
+    <td>${badge}</td>
+    <td>${emails.length  ? emails.map(e  => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${phones.length  ? phones.map(p  => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
+}
+
 // ── Main scraping loop ─────────────────────────────────────────────
 async function startScraping() {
   if (state.isRunning) return;
@@ -224,6 +436,16 @@ async function startScraping() {
     const query = document.getElementById('google-query').value.trim();
     if (!query) { showToast('Please enter a search query.', 'error'); return; }
     await startGoogleFlow(query);
+    return;
+  }
+
+  // ── Maps mode ──
+  if (state.activeTab === 'maps') {
+    const mapsUrl = document.getElementById('maps-url-input').value.trim();
+    if (!mapsUrl) { showToast('Please paste a Google Maps URL.', 'error'); return; }
+    const isValid = mapsUrl.includes('google.com/maps') || mapsUrl.includes('maps.google.com');
+    if (!isValid) { showToast('Invalid Maps URL — must contain google.com/maps', 'error'); return; }
+    await startMapsFlow(mapsUrl);
     return;
   }
 
@@ -446,6 +668,8 @@ function buildTableHead(mode) {
 
   if (mode === 'google') {
     cols = ['#', 'Business', 'Website', 'Status', 'Emails', 'Phones', 'Socials'];
+  } else if (mode === 'maps') {
+    cols = ['#', 'Business', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Socials'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'Socials'];
   }
