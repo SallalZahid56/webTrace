@@ -758,14 +758,30 @@ function buildRowHTML(idx, url, data, status) {
     <td>${socials.length ? socials.map(s=>`<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
 }
 
-// ── Download CSV ───────────────────────────────────────────────────
 function downloadCSV() {
   if (!state.results.length) return;
 
   let csv = '';
 
-  if (state.activeTab === 'google') {
-    // Google mode — business name, website, description, contacts
+  if (state.activeTab === 'maps') {
+    // Maps mode — full business profile + scraped contacts
+    csv += ['Business Name', 'Address', 'Phone', 'Rating', 'Reviews',
+            'Website', 'Emails', 'Social Links']
+      .map(csvEscape).join(',') + '\n';
+    state.results.forEach(r => {
+      csv += [
+        r.name        ?? '',
+        r.address     ?? '',
+        r.phone       ?? '',
+        r.rating      ?? '',
+        r.reviews     ?? '',
+        r.website     ?? '',
+        r.emails?.join(' | ')                  ?? '',
+        r.socials?.map(s => s.url).join(' | ') ?? '',
+      ].map(csvEscape).join(',') + '\n';
+    });
+
+  } else if (state.activeTab === 'google') {
     csv += ['Business Name', 'Website', 'Description', 'Emails', 'Phone Numbers', 'Social Links']
       .map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
@@ -773,14 +789,13 @@ function downloadCSV() {
         r.name        ?? '',
         r.website     ?? '',
         r.description ?? '',
-        r.emails?.join(' | ')              ?? '',
-        r.phones?.join(' | ')              ?? '',
+        r.emails?.join(' | ')                  ?? '',
+        r.phones?.join(' | ')                  ?? '',
         r.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
 
   } else if (state.activeTab === 'csv' && state.csvData) {
-    // CSV enrich mode — append columns to original CSV
     const colIdx = parseInt(document.getElementById('url-column').value, 10);
     csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'Social Links']
       .map(csvEscape).join(',') + '\n';
@@ -789,29 +804,28 @@ function downloadCSV() {
       const result = state.results.find(r => r.url === url);
       csv += [
         ...row,
-        result?.emails?.join(' | ')              ?? '',
-        result?.phones?.join(' | ')              ?? '',
+        result?.emails?.join(' | ')                  ?? '',
+        result?.phones?.join(' | ')                  ?? '',
         result?.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
 
   } else {
-    // URL mode — fresh CSV
     csv += ['URL', 'Emails', 'Phone Numbers', 'Social Links'].map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
       csv += [
         r.url,
-        r.emails?.join(' | ')              ?? '',
-        r.phones?.join(' | ')              ?? '',
+        r.emails?.join(' | ')                  ?? '',
+        r.phones?.join(' | ')                  ?? '',
         r.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
   }
 
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = Object.assign(document.createElement('a'), {
-    href: url,
+    href:     url,
     download: `webtrace-${state.activeTab}-${datestamp()}.csv`,
   });
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
