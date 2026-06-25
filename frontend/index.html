@@ -1,207 +1,313 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>WebTrace — v2</title>
-<link rel="stylesheet" href="style.css"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebTrace — v2</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
-<!-- HEADER -->
-<header>
-  <div class="logo-icon">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-    <div class="scan-line"></div>
-  </div>
-  <span class="wordmark">Web<span>Trace</span></span>
-  <span class="vtag">v2.0</span>
-  <div class="hdr-right">
-    <div id="header-status" class="status-pill">
-      <span class="pdot"></span>
-      <span id="header-status-text">Scanning…</span>
+  <!-- HEADER -->
+  <header>
+    <div class="logo-icon">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+      <div class="scan-line"></div>
     </div>
-  </div>
-</header>
-
-<div class="split">
-
-  <!-- ── LEFT PANE ── -->
-  <div class="left-pane">
-    <div class="pane-header">
-      <div class="pane-title" id="pane-title">New scan</div>
-      <div class="pane-sub"  id="pane-sub">Paste URLs or upload a CSV</div>
+    <span class="wordmark">Web<span>Trace</span></span>
+    <span class="vtag">v2.0</span>
+    <div class="hdr-right">
+      <div id="header-status" class="status-pill">
+        <span class="pdot"></span>
+        <span id="header-status-text">Scanning…</span>
+      </div>
     </div>
+  </header>
 
-    <!-- Input section (shown before scan) -->
-    <div id="input-section" class="pane-body">
+  <div class="split">
 
-      <!-- Tabs — now 3 tabs -->
-      <div class="tabs">
-        <button id="tab-urls"    class="tab-btn active" onclick="switchTab('urls')">Paste URLs</button>
-        <button id="tab-csv"     class="tab-btn"        onclick="switchTab('csv')">Upload CSV</button>
-        <button id="tab-google"  class="tab-btn"        onclick="switchTab('google')">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:11px;height:11px;display:inline;margin-right:3px;vertical-align:-1px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          Google Search
+    <!-- ── LEFT PANE ── -->
+    <div class="left-pane">
+      <div class="pane-header">
+        <div class="pane-title" id="pane-title">New scan</div>
+        <div class="pane-sub" id="pane-sub">Paste URLs or upload a CSV</div>
+      </div>
+
+      <!-- Input section (shown before scan) -->
+      <div id="input-section" class="pane-body">
+
+        <!-- Tabs — now 3 tabs -->
+        <div class="tabs">
+          <button id="tab-urls" class="tab-btn active" onclick="switchTab('urls')">Paste URLs</button>
+          <button id="tab-csv" class="tab-btn" onclick="switchTab('csv')">Upload CSV</button>
+          <button id="tab-google" class="tab-btn" onclick="switchTab('google')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+              style="width:11px;height:11px;display:inline;margin-right:3px;vertical-align:-1px">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            DDG Search
+          </button>
+          <button id="tab-maps" class="tab-btn" onclick="switchTab('maps')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+              style="width:11px;height:11px;display:inline;margin-right:3px;vertical-align:-1px">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+            </svg>
+            Maps
+          </button>
+        </div>
+
+        <!-- ── URL panel ── -->
+        <div id="panel-urls">
+          <div class="section-lbl">URLs — one per line</div>
+          <textarea id="url-input" rows="8"
+            placeholder="https://example.com&#10;https://acme.io&#10;https://startup.co"></textarea>
+          <div class="url-meta">
+            <span id="url-count">0 URLs entered</span>
+            <button onclick="clearUrls()">Clear</button>
+          </div>
+        </div>
+
+        <!-- ── CSV panel ── -->
+        <div id="panel-csv" style="display:none">
+          <div class="section-lbl">Upload CSV file</div>
+          <div id="drop-zone" class="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave()"
+            ondrop="handleDrop(event)" onclick="document.getElementById('csv-file').click()">
+            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+            </svg>
+            <p>Drop CSV here or <span>browse</span></p>
+            <p class="sub">URL columns are auto-detected</p>
+            <input id="csv-file" type="file" accept=".csv" style="display:none" onchange="handleFileUpload(event)" />
+          </div>
+          <div id="file-ok" class="file-ok">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+            <span id="file-name-label">file.csv loaded</span>
+          </div>
+          <div id="col-select" class="col-select">
+            <div class="section-lbl" style="margin-top:10px">URL column</div>
+            <select id="url-column"></select>
+            <div class="url-meta" style="margin-top:6px"><span id="csv-url-count"></span></div>
+          </div>
+        </div>
+
+        <!-- ── Google Search panel (NEW) ── -->
+        <div id="panel-google" style="display:none">
+
+          <div class="section-lbl">Search query</div>
+          <input type="text" id="google-query" class="google-query-input" placeholder="e.g. Plumbers in Houston TX"
+            oninput="updateGoogleMeta()" />
+          <div class="url-meta" style="margin-top:6px">
+            <span id="google-query-hint">Type a business + location</span>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section-lbl">Number of results</div>
+          <div class="num-results-row">
+            <button class="num-chip active" data-val="5" onclick="setNumResults(this)">5</button>
+            <button class="num-chip" data-val="10" onclick="setNumResults(this)">10</button>
+            <button class="num-chip" data-val="20" onclick="setNumResults(this)">20</button>
+            <button class="num-chip" data-val="30" onclick="setNumResults(this)">30</button>
+          </div>
+          <input type="hidden" id="google-num-results" value="5" />
+
+          <div class="divider"></div>
+
+          <!-- Info banner explaining the two-phase flow -->
+          <div class="google-info-banner">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+              style="width:14px;height:14px;flex-shrink:0;color:var(--blue)">
+              <circle cx="12" cy="12" r="10" />
+              <path stroke-linecap="round" d="M12 16v-4M12 8h.01" />
+            </svg>
+            <span>
+              Results are fetched from DuckDuckGo, then each website is
+              <strong>automatically scraped</strong> for emails, phones &amp; socials.
+            </span>
+          </div>
+
+        </div>
+        <!-- end panel-google -->
+
+        <!-- ── Maps Scrape panel (NEW) ── -->
+        <div id="panel-maps" style="display:none">
+
+          <div class="section-lbl">Google Maps URL</div>
+          <input type="text" id="maps-url-input" class="google-query-input"
+            placeholder="https://www.google.com/maps/search/plumbers+in+houston..." oninput="updateMapsMeta()" />
+
+          <!-- Validation state -->
+          <div id="maps-url-ok" class="file-ok" style="display:none;margin-top:8px">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+            <span>Valid Google Maps URL</span>
+          </div>
+          <div id="maps-url-err" class="maps-url-err" style="display:none;margin-top:8px">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            <span>Must be a google.com/maps URL</span>
+          </div>
+
+          <div class="url-meta" style="margin-top:6px">
+            <span id="maps-url-hint">Paste a Google Maps search results URL</span>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section-lbl">Max results to scrape</div>
+          <div class="num-results-row">
+            <button class="num-chip active" data-val="10" onclick="setMapsMaxResults(this)">10</button>
+            <button class="num-chip" data-val="20" onclick="setMapsMaxResults(this)">20</button>
+            <button class="num-chip" data-val="30" onclick="setMapsMaxResults(this)">30</button>
+            <button class="num-chip" data-val="50" onclick="setMapsMaxResults(this)">50</button>
+          </div>
+          <input type="hidden" id="maps-max-results" value="10" />
+
+          <div class="divider"></div>
+
+          <!-- How to get the URL guide -->
+          <div class="maps-how-to">
+            <div class="maps-how-title">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                style="width:12px;height:12px;flex-shrink:0">
+                <circle cx="12" cy="12" r="10" />
+                <path stroke-linecap="round" d="M12 16v-4M12 8h.01" />
+              </svg>
+              How to get a Maps URL
+            </div>
+            <ol class="maps-how-steps">
+              <li>Open <strong>Google Maps</strong> in your browser</li>
+              <li>Search for a business type + location<br><span class="maps-how-eg">e.g. "plumbers in Houston
+                  TX"</span></li>
+              <li>Copy the full URL from your address bar</li>
+              <li>Paste it above</li>
+            </ol>
+          </div>
+
+        </div>
+        <!-- end panel-maps -->
+
+        <!-- Options (hidden in Google mode, shown in URL/CSV modes) -->
+        <div id="options-section">
+          <div class="divider"></div>
+          <div class="section-lbl">Options</div>
+          <div class="opt-grid">
+            <label class="opt-tile selected" onclick="toggleTile(this)">
+              <input type="checkbox" id="opt-contact" checked />
+              <div>
+                <div class="opt-tile-title">Contact pages</div>
+                <div class="opt-tile-desc">Also scan /contact &amp; /about</div>
+              </div>
+            </label>
+            <label class="opt-tile selected" onclick="toggleTile(this)">
+              <input type="checkbox" id="opt-dedup" checked />
+              <div>
+                <div class="opt-tile-title">Deduplicate</div>
+                <div class="opt-tile-desc">Remove duplicate emails</div>
+              </div>
+            </label>
+            <label class="opt-tile selected" onclick="toggleTile(this)">
+              <input type="checkbox" id="opt-social" checked />
+              <div>
+                <div class="opt-tile-title">Social profiles</div>
+                <div class="opt-tile-desc">LinkedIn, Twitter, GitHub…</div>
+              </div>
+            </label>
+            <label class="opt-tile" onclick="toggleTile(this)">
+              <input type="checkbox" id="opt-validate" />
+              <div>
+                <div class="opt-tile-title">Validate emails</div>
+                <div class="opt-tile-desc">Basic format check</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+      </div>
+      <!-- end input-section -->
+
+      <!-- Activity feed (shown during scan) -->
+      <div id="activity-feed" class="activity-feed pane-body" style="flex:1;overflow-y:auto">
+        <div class="feed-title">Scan activity</div>
+        <div id="feed-list"></div>
+      </div>
+
+      <div class="pane-footer">
+        <button id="run-btn" class="run-btn" onclick="startScraping()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+          Start scraping
+        </button>
+      </div>
+    </div>
+    <!-- end left-pane -->
+
+    <!-- ── RIGHT PANE ── -->
+    <div class="right-pane">
+      <div class="right-hdr">
+        <div>
+          <div class="right-title">Results</div>
+          <div id="results-sub" class="right-sub">Run a scan to see results</div>
+        </div>
+        <button id="dl-btn" class="dl-btn" onclick="downloadCSV()" disabled>
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Download CSV
         </button>
       </div>
 
-      <!-- ── URL panel ── -->
-      <div id="panel-urls">
-        <div class="section-lbl">URLs — one per line</div>
-        <textarea id="url-input" rows="8" placeholder="https://example.com&#10;https://acme.io&#10;https://startup.co"></textarea>
-        <div class="url-meta">
-          <span id="url-count">0 URLs entered</span>
-          <button onclick="clearUrls()">Clear</button>
+      <!-- Progress strip -->
+      <div id="progress-strip" class="progress-strip">
+        <div class="spinner"></div>
+        <span id="prog-label" class="prog-label">Scanning…</span>
+        <div class="prog-track">
+          <div id="prog-fill" class="prog-fill"></div>
         </div>
+        <span id="prog-count" class="prog-count">0 / 0</span>
       </div>
 
-      <!-- ── CSV panel ── -->
-      <div id="panel-csv" style="display:none">
-        <div class="section-lbl">Upload CSV file</div>
-        <div id="drop-zone" class="drop-zone"
-          ondragover="handleDragOver(event)" ondragleave="handleDragLeave()" ondrop="handleDrop(event)"
-          onclick="document.getElementById('csv-file').click()">
-          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
-          <p>Drop CSV here or <span>browse</span></p>
-          <p class="sub">URL columns are auto-detected</p>
-          <input id="csv-file" type="file" accept=".csv" style="display:none" onchange="handleFileUpload(event)"/>
-        </div>
-        <div id="file-ok" class="file-ok">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-          <span id="file-name-label">file.csv loaded</span>
-        </div>
-        <div id="col-select" class="col-select">
-          <div class="section-lbl" style="margin-top:10px">URL column</div>
-          <select id="url-column"></select>
-          <div class="url-meta" style="margin-top:6px"><span id="csv-url-count"></span></div>
-        </div>
+      <!-- Empty state -->
+      <div id="empty-state" class="empty-state">
+        <svg fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <p>No results yet</p>
+        <small>Paste URLs, upload a CSV, or use Google Search — results appear here in real time.</small>
       </div>
 
-      <!-- ── Google Search panel (NEW) ── -->
-      <div id="panel-google" style="display:none">
-
-        <div class="section-lbl">Search query</div>
-        <input
-          type="text"
-          id="google-query"
-          class="google-query-input"
-          placeholder="e.g. Plumbers in Houston TX"
-          oninput="updateGoogleMeta()"
-        />
-        <div class="url-meta" style="margin-top:6px">
-          <span id="google-query-hint">Type a business + location</span>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="section-lbl">Number of results</div>
-        <div class="num-results-row">
-          <button class="num-chip active" data-val="5"  onclick="setNumResults(this)">5</button>
-          <button class="num-chip"        data-val="10" onclick="setNumResults(this)">10</button>
-          <button class="num-chip"        data-val="20" onclick="setNumResults(this)">20</button>
-          <button class="num-chip"        data-val="30" onclick="setNumResults(this)">30</button>
-        </div>
-        <input type="hidden" id="google-num-results" value="5"/>
-
-        <div class="divider"></div>
-
-        <!-- Info banner explaining the two-phase flow -->
-        <div class="google-info-banner">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:14px;height:14px;flex-shrink:0;color:var(--blue)"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 16v-4M12 8h.01"/></svg>
-          <span>
-            Results are fetched from DuckDuckGo, then each website is
-            <strong>automatically scraped</strong> for emails, phones &amp; socials.
-          </span>
-        </div>
-
+      <!-- Table -->
+      <div id="table-wrap" class="table-wrap" style="display:none">
+        <table>
+          <thead id="table-head">
+            <!-- built by JS depending on mode -->
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
       </div>
-      <!-- end panel-google -->
-
-      <!-- Options (hidden in Google mode, shown in URL/CSV modes) -->
-      <div id="options-section">
-        <div class="divider"></div>
-        <div class="section-lbl">Options</div>
-        <div class="opt-grid">
-          <label class="opt-tile selected" onclick="toggleTile(this)">
-            <input type="checkbox" id="opt-contact" checked/>
-            <div><div class="opt-tile-title">Contact pages</div><div class="opt-tile-desc">Also scan /contact &amp; /about</div></div>
-          </label>
-          <label class="opt-tile selected" onclick="toggleTile(this)">
-            <input type="checkbox" id="opt-dedup" checked/>
-            <div><div class="opt-tile-title">Deduplicate</div><div class="opt-tile-desc">Remove duplicate emails</div></div>
-          </label>
-          <label class="opt-tile selected" onclick="toggleTile(this)">
-            <input type="checkbox" id="opt-social" checked/>
-            <div><div class="opt-tile-title">Social profiles</div><div class="opt-tile-desc">LinkedIn, Twitter, GitHub…</div></div>
-          </label>
-          <label class="opt-tile" onclick="toggleTile(this)">
-            <input type="checkbox" id="opt-validate"/>
-            <div><div class="opt-tile-title">Validate emails</div><div class="opt-tile-desc">Basic format check</div></div>
-          </label>
-        </div>
-      </div>
-
     </div>
-    <!-- end input-section -->
+    <!-- end right-pane -->
 
-    <!-- Activity feed (shown during scan) -->
-    <div id="activity-feed" class="activity-feed pane-body" style="flex:1;overflow-y:auto">
-      <div class="feed-title">Scan activity</div>
-      <div id="feed-list"></div>
-    </div>
-
-    <div class="pane-footer">
-      <button id="run-btn" class="run-btn" onclick="startScraping()">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Start scraping
-      </button>
-    </div>
   </div>
-  <!-- end left-pane -->
 
-  <!-- ── RIGHT PANE ── -->
-  <div class="right-pane">
-    <div class="right-hdr">
-      <div>
-        <div class="right-title">Results</div>
-        <div id="results-sub" class="right-sub">Run a scan to see results</div>
-      </div>
-      <button id="dl-btn" class="dl-btn" onclick="downloadCSV()" disabled>
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-        Download CSV
-      </button>
-    </div>
-
-    <!-- Progress strip -->
-    <div id="progress-strip" class="progress-strip">
-      <div class="spinner"></div>
-      <span id="prog-label" class="prog-label">Scanning…</span>
-      <div class="prog-track"><div id="prog-fill" class="prog-fill"></div></div>
-      <span id="prog-count" class="prog-count">0 / 0</span>
-    </div>
-
-    <!-- Empty state -->
-    <div id="empty-state" class="empty-state">
-      <svg fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <p>No results yet</p>
-      <small>Paste URLs, upload a CSV, or use Google Search — results appear here in real time.</small>
-    </div>
-
-    <!-- Table -->
-    <div id="table-wrap" class="table-wrap" style="display:none">
-      <table>
-        <thead id="table-head">
-          <!-- built by JS depending on mode -->
-        </thead>
-        <tbody id="results-body"></tbody>
-      </table>
-    </div>
-  </div>
-  <!-- end right-pane -->
-
-</div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
+
 </html>
