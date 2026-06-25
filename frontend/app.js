@@ -14,16 +14,16 @@ function switchTab(tab) {
   state.activeTab = tab;
 
   // Toggle tab buttons
-  document.getElementById('tab-urls').classList.toggle('active',    tab === 'urls');
-  document.getElementById('tab-csv').classList.toggle('active',     tab === 'csv');
-  document.getElementById('tab-google').classList.toggle('active',  tab === 'google');
-  document.getElementById('tab-maps').classList.toggle('active',    tab === 'maps');
+  document.getElementById('tab-urls').classList.toggle('active', tab === 'urls');
+  document.getElementById('tab-csv').classList.toggle('active', tab === 'csv');
+  document.getElementById('tab-google').classList.toggle('active', tab === 'google');
+  document.getElementById('tab-maps').classList.toggle('active', tab === 'maps');
 
   // Toggle panels
-  document.getElementById('panel-urls').style.display    = tab === 'urls'   ? 'block' : 'none';
-  document.getElementById('panel-csv').style.display     = tab === 'csv'    ? 'block' : 'none';
-  document.getElementById('panel-google').style.display  = tab === 'google' ? 'block' : 'none';
-  document.getElementById('panel-maps').style.display    = tab === 'maps'   ? 'block' : 'none';
+  document.getElementById('panel-urls').style.display = tab === 'urls' ? 'block' : 'none';
+  document.getElementById('panel-csv').style.display = tab === 'csv' ? 'block' : 'none';
+  document.getElementById('panel-google').style.display = tab === 'google' ? 'block' : 'none';
+  document.getElementById('panel-maps').style.display = tab === 'maps' ? 'block' : 'none';
 
   // Hide options section in Google and Maps mode
   const showOptions = tab === 'urls' || tab === 'csv';
@@ -64,8 +64,8 @@ function parseUrlText(text) {
 // ── Google Search UI ───────────────────────────────────────────────
 function updateGoogleMeta() {
   const query = document.getElementById('google-query').value.trim();
-  const hint  = document.getElementById('google-query-hint');
-  const num   = parseInt(document.getElementById('google-num-results').value, 10);
+  const hint = document.getElementById('google-query-hint');
+  const num = parseInt(document.getElementById('google-num-results').value, 10);
 
   if (!query) {
     hint.textContent = 'Type a business + location';
@@ -95,22 +95,22 @@ function setNumResults(btn) {
 
 // ── Maps UI ────────────────────────────────────────────────────────
 function updateMapsMeta() {
-  const val     = document.getElementById('maps-url-input').value.trim();
-  const hint    = document.getElementById('maps-url-hint');
-  const okEl    = document.getElementById('maps-url-ok');
-  const errEl   = document.getElementById('maps-url-err');
+  const val = document.getElementById('maps-url-input').value.trim();
+  const hint = document.getElementById('maps-url-hint');
+  const okEl = document.getElementById('maps-url-ok');
+  const errEl = document.getElementById('maps-url-err');
 
   if (!val) {
     hint.textContent = 'Paste a Google Maps search results URL';
-    okEl.style.display  = 'none';
-    errEl.style.display = 'none';
+    okEl.classList.remove('show');
+    errEl.classList.remove('show');
     return;
   }
 
   const isValid = val.includes('google.com/maps') || val.includes('maps.google.com');
 
-  okEl.style.display  = isValid ? 'flex' : 'none';
-  errEl.style.display = isValid ? 'none' : 'flex';
+  okEl.classList.toggle('show', isValid);
+  errEl.classList.toggle('show', !isValid);
 
   const num = parseInt(document.getElementById('maps-max-results').value, 10);
   hint.textContent = isValid
@@ -150,7 +150,7 @@ function processCSVFile(file) {
     sel.innerHTML = '';
     parsed.headers.forEach((h, i) => {
       const o = document.createElement('option');
-      o.value = i; o.textContent = h || `Column ${i+1}`;
+      o.value = i; o.textContent = h || `Column ${i + 1}`;
       if (/url|website|domain|link|site/i.test(h)) o.selected = true;
       sel.appendChild(o);
     });
@@ -165,19 +165,19 @@ document.getElementById('url-column').addEventListener('change', updateCsvUrlCou
 function updateCsvUrlCount() {
   if (!state.csvData) return;
   const i = parseInt(document.getElementById('url-column').value, 10);
-  const n = state.csvData.map(r => (r[i]||'').trim()).filter(v => v.startsWith('http')).length;
-  document.getElementById('csv-url-count').textContent = `${n} valid URL${n!==1?'s':''} in this column`;
+  const n = state.csvData.map(r => (r[i] || '').trim()).filter(v => v.startsWith('http')).length;
+  document.getElementById('csv-url-count').textContent = `${n} valid URL${n !== 1 ? 's' : ''} in this column`;
 }
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   return { headers: splitCSVLine(lines[0]), rows: lines.slice(1).map(splitCSVLine) };
 }
 function splitCSVLine(line) {
-  const r=[]; let c='',q=false;
-  for (let i=0;i<line.length;i++){
-    if(line[i]==='"'){q=!q;continue}
-    if(line[i]===','&&!q){r.push(c.trim());c='';continue}
-    c+=line[i];
+  const r = []; let c = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { q = !q; continue }
+    if (line[i] === ',' && !q) { r.push(c.trim()); c = ''; continue }
+    c += line[i];
   }
   r.push(c.trim()); return r;
 }
@@ -185,7 +185,7 @@ function collectUrls() {
   if (state.activeTab === 'urls') return parseUrlText(document.getElementById('url-input').value);
   if (!state.csvData) return [];
   const i = parseInt(document.getElementById('url-column').value, 10);
-  return state.csvData.map(r => (r[i]||'').trim()).filter(v => v.startsWith('http'));
+  return state.csvData.map(r => (r[i] || '').trim()).filter(v => v.startsWith('http'));
 }
 
 // ── Real API call (replaces mockScrape) ───────────────────────────
@@ -226,9 +226,9 @@ function buildFeedItem(idx, url, status, data) {
     metaHTML = `<div class="feed-meta">Fetching homepage…</div>`;
   } else if (status === 'done') {
     dotHTML = `<div class="feed-dot done"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg></div>`;
-    const total = (data?.emails?.length||0) + (data?.phones?.length||0) + (data?.socials?.length||0);
+    const total = (data?.emails?.length || 0) + (data?.phones?.length || 0) + (data?.socials?.length || 0);
     if (total > 0) {
-      metaHTML = `<div class="feed-meta">${data.emails.length} email${data.emails.length!==1?'s':''} · ${data.phones.length} phone${data.phones.length!==1?'s':''} · ${data.socials.length} social</div>`;
+      metaHTML = `<div class="feed-meta">${data.emails.length} email${data.emails.length !== 1 ? 's' : ''} · ${data.phones.length} phone${data.phones.length !== 1 ? 's' : ''} · ${data.socials.length} social</div>`;
       foundHTML = `<span class="feed-found ok">✓ Contact data found</span>`;
     } else {
       metaHTML = `<div class="feed-meta">Scanned — no contact data found</div>`;
@@ -247,7 +247,7 @@ function buildFeedItem(idx, url, status, data) {
     <div class="feed-item" id="feed-${idx}">
       ${dotHTML}
       <div class="feed-content">
-        <div class="feed-label${status==='idle'?' muted':''}">${host}</div>
+        <div class="feed-label${status === 'idle' ? ' muted' : ''}">${host}</div>
         ${metaHTML}
         ${foundHTML}
       </div>
@@ -268,7 +268,7 @@ async function startMapsFlow(mapsUrl) {
   }
 
   state.isRunning = true;
-  state.results   = [];
+  state.results = [];
 
   // Switch UI to scan mode
   document.getElementById('input-section').style.display = 'none';
@@ -287,10 +287,10 @@ async function startMapsFlow(mapsUrl) {
   // ── Phase A: scrape Maps listings via Playwright ──
   let listings = [];
   try {
-    const res  = await fetch(`${API_BASE}/maps-scrape`, {
-      method:  'POST',
+    const res = await fetch(`${API_BASE}/maps-scrape`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ url: mapsUrl, max_results: maxResults }),
+      body: JSON.stringify({ url: mapsUrl, max_results: maxResults }),
     });
     const data = await res.json();
 
@@ -300,7 +300,7 @@ async function startMapsFlow(mapsUrl) {
       return;
     }
     listings = data.results || [];
-  } catch(err) {
+  } catch (err) {
     showToast('Failed to reach maps-scrape endpoint.', 'error');
     resetToInput();
     return;
@@ -315,8 +315,8 @@ async function startMapsFlow(mapsUrl) {
   // Pre-populate feed with all listings as idle
   const feedList = document.getElementById('feed-list');
   listings.forEach((biz, i) => {
-    const label = biz.website || biz.name || `Business ${i+1}`;
-    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i+1, label, 'idle', null));
+    const label = biz.website || biz.name || `Business ${i + 1}`;
+    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i + 1, label, 'idle', null));
   });
 
   document.getElementById('header-status-text').textContent = `0 / ${listings.length} scraped`;
@@ -325,16 +325,16 @@ async function startMapsFlow(mapsUrl) {
   for (let i = 0; i < listings.length; i++) {
     const biz = listings[i];
     const url = biz.website || '';
-    const label = url || biz.name || `Business ${i+1}`;
+    const label = url || biz.name || `Business ${i + 1}`;
 
-    const feedEl = document.getElementById(`feed-${i+1}`);
-    if (feedEl) feedEl.outerHTML = buildFeedItem(i+1, label, 'pending', null);
-    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth', block:'nearest'});
+    const feedEl = document.getElementById(`feed-${i + 1}`);
+    if (feedEl) feedEl.outerHTML = buildFeedItem(i + 1, label, 'pending', null);
+    document.getElementById(`feed-${i + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     document.getElementById('prog-label').textContent = `Scraping ${biz.name || hostname(url)}…`;
-    document.getElementById('header-status-text').textContent = `${i+1} / ${listings.length} scraping`;
+    document.getElementById('header-status-text').textContent = `${i + 1} / ${listings.length} scraping`;
     updateProgress(i, listings.length);
-    addMapsTableRow(i+1, biz, null, 'scanning');
+    addMapsTableRow(i + 1, biz, null, 'scanning');
 
     // Only scrape website if one exists
     if (url) {
@@ -342,32 +342,32 @@ async function startMapsFlow(mapsUrl) {
         const scrapeData = await scrapeUrl(url);
         const merged = { ...biz, emails: scrapeData.emails, phones: scrapeData.phones, socials: scrapeData.socials };
         state.results.push(merged);
-        updateMapsTableRow(i+1, merged, 'done');
-        const el = document.getElementById(`feed-${i+1}`);
-        if (el) el.outerHTML = buildFeedItem(i+1, label, 'done', scrapeData);
-      } catch(err) {
-        const merged = { ...biz, emails:[], phones:[], socials:[], error: err.message };
+        updateMapsTableRow(i + 1, merged, 'done');
+        const el = document.getElementById(`feed-${i + 1}`);
+        if (el) el.outerHTML = buildFeedItem(i + 1, label, 'done', scrapeData);
+      } catch (err) {
+        const merged = { ...biz, emails: [], phones: [], socials: [], error: err.message };
         state.results.push(merged);
-        updateMapsTableRow(i+1, merged, 'error');
-        const el = document.getElementById(`feed-${i+1}`);
-        if (el) el.outerHTML = buildFeedItem(i+1, label, 'error', null);
+        updateMapsTableRow(i + 1, merged, 'error');
+        const el = document.getElementById(`feed-${i + 1}`);
+        if (el) el.outerHTML = buildFeedItem(i + 1, label, 'error', null);
       }
     } else {
       // No website — still show the Maps data we have
-      const merged = { ...biz, emails:[], phones:[], socials:[] };
+      const merged = { ...biz, emails: [], phones: [], socials: [] };
       state.results.push(merged);
-      updateMapsTableRow(i+1, merged, 'done');
-      const el = document.getElementById(`feed-${i+1}`);
-      if (el) el.outerHTML = buildFeedItem(i+1, label, 'done', { emails:[], phones:[], socials:[] });
+      updateMapsTableRow(i + 1, merged, 'done');
+      const el = document.getElementById(`feed-${i + 1}`);
+      if (el) el.outerHTML = buildFeedItem(i + 1, label, 'done', { emails: [], phones: [], socials: [] });
     }
 
-    updateProgress(i+1, listings.length);
-    const done     = state.results.length;
+    updateProgress(i + 1, listings.length);
+    const done = state.results.length;
     const withData = state.results.filter(r =>
       r.emails?.length || r.phones?.length || r.socials?.length || r.phone
     ).length;
     document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
-    document.getElementById('header-status-text').textContent = `${i+1} / ${listings.length} scraped`;
+    document.getElementById('header-status-text').textContent = `${i + 1} / ${listings.length} scraped`;
   }
 
   finishScan(listings.length);
@@ -379,7 +379,7 @@ function addMapsTableRow(idx, biz, scrapeData, status) {
   tr.id = `row-${idx}`; tr.className = 'row-appear';
   tr.innerHTML = buildMapsRowHTML(idx, biz, scrapeData, status);
   document.getElementById('results-body').appendChild(tr);
-  tr.scrollIntoView({behavior:'smooth', block:'nearest'});
+  tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function updateMapsTableRow(idx, biz, status) {
@@ -388,18 +388,18 @@ function updateMapsTableRow(idx, biz, status) {
 }
 
 function buildMapsRowHTML(idx, biz, scrapeData, status) {
-  const url     = biz.website || '';
-  const name    = biz.name    || '—';
+  const url = biz.website || '';
+  const name = biz.name || '—';
   const address = biz.address || '—';
-  const phone   = biz.phone   || '';
-  const rating  = biz.rating  ? `⭐ ${biz.rating}` : '—';
+  const phone = biz.phone || '';
+  const rating = biz.rating ? `⭐ ${biz.rating}` : '—';
   const reviews = biz.reviews ? `(${biz.reviews})` : '';
 
-  const emails  = scrapeData?.emails  ?? [];
+  const emails = scrapeData?.emails ?? [];
   const socials = scrapeData?.socials ?? [];
 
   // Phone: prefer Maps phone, fallback to scraped phones
-  const phones  = phone
+  const phones = phone
     ? [phone]
     : (scrapeData?.phones ?? []);
 
@@ -422,8 +422,8 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
     <td><span style="font-size:11px;color:var(--slate-600)">${rating} ${reviews}</span></td>
     <td>${websiteCell}</td>
     <td>${badge}</td>
-    <td>${emails.length  ? emails.map(e  => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${phones.length  ? phones.map(p  => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${phones.length ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
     <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
 }
 
@@ -462,7 +462,7 @@ async function startScraping() {
   }
 
   state.isRunning = true;
-  state.results   = [];
+  state.results = [];
 
   document.getElementById('input-section').style.display = 'none';
   document.getElementById('activity-feed').classList.add('show');
@@ -479,38 +479,38 @@ async function startScraping() {
   const feedList = document.getElementById('feed-list');
   feedList.innerHTML = '';
   urls.forEach((url, i) => {
-    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i+1, url, 'idle', null));
+    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i + 1, url, 'idle', null));
   });
 
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
 
-    document.getElementById(`feed-${i+1}`).outerHTML = buildFeedItem(i+1, url, 'pending', null);
-    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth', block:'nearest'});
+    document.getElementById(`feed-${i + 1}`).outerHTML = buildFeedItem(i + 1, url, 'pending', null);
+    document.getElementById(`feed-${i + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     document.getElementById('prog-label').textContent = `Scanning ${hostname(url)}…`;
-    document.getElementById('header-status-text').textContent = `${i+1} / ${urls.length} scanning`;
+    document.getElementById('header-status-text').textContent = `${i + 1} / ${urls.length} scanning`;
     updateProgress(i, urls.length);
-    addTableRow(i+1, url, null, 'scanning');
+    addTableRow(i + 1, url, null, 'scanning');
 
     try {
       const data = await scrapeUrl(url);
       state.results.push({ url, ...data });
-      updateTableRow(i+1, url, data, 'done');
-      const el = document.getElementById(`feed-${i+1}`);
-      if (el) el.outerHTML = buildFeedItem(i+1, url, 'done', data);
-    } catch(err) {
-      state.results.push({ url, emails:[], phones:[], socials:[], error: err.message });
-      updateTableRow(i+1, url, null, 'error');
-      const el = document.getElementById(`feed-${i+1}`);
-      if (el) el.outerHTML = buildFeedItem(i+1, url, 'error', null);
+      updateTableRow(i + 1, url, data, 'done');
+      const el = document.getElementById(`feed-${i + 1}`);
+      if (el) el.outerHTML = buildFeedItem(i + 1, url, 'done', data);
+    } catch (err) {
+      state.results.push({ url, emails: [], phones: [], socials: [], error: err.message });
+      updateTableRow(i + 1, url, null, 'error');
+      const el = document.getElementById(`feed-${i + 1}`);
+      if (el) el.outerHTML = buildFeedItem(i + 1, url, 'error', null);
     }
 
-    updateProgress(i+1, urls.length);
-    const done     = state.results.length;
-    const withData = state.results.filter(r => r.emails?.length||r.phones?.length||r.socials?.length).length;
+    updateProgress(i + 1, urls.length);
+    const done = state.results.length;
+    const withData = state.results.filter(r => r.emails?.length || r.phones?.length || r.socials?.length).length;
     document.getElementById('results-sub').textContent = `${done} scanned · ${withData} with contact data`;
-    document.getElementById('header-status-text').textContent = `${i+1} / ${urls.length} scanned`;
+    document.getElementById('header-status-text').textContent = `${i + 1} / ${urls.length} scanned`;
   }
 
   finishScan(urls.length);
@@ -529,7 +529,7 @@ async function startGoogleFlow(query) {
   }
 
   state.isRunning = true;
-  state.results   = [];
+  state.results = [];
 
   // Switch UI to scan mode
   document.getElementById('input-section').style.display = 'none';
@@ -548,10 +548,10 @@ async function startGoogleFlow(query) {
   // ── Phase A: DuckDuckGo search ──
   let searchResults = [];
   try {
-    const res  = await fetch(`${API_BASE}/google-search`, {
-      method:  'POST',
+    const res = await fetch(`${API_BASE}/google-search`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ query, num_results: numResults }),
+      body: JSON.stringify({ query, num_results: numResults }),
     });
     const data = await res.json();
     if (data.error && !data.results?.length) {
@@ -560,7 +560,7 @@ async function startGoogleFlow(query) {
       return;
     }
     searchResults = data.results || [];
-  } catch(err) {
+  } catch (err) {
     showToast('Failed to reach search endpoint.', 'error');
     resetToInput();
     return;
@@ -575,7 +575,7 @@ async function startGoogleFlow(query) {
   // Pre-populate feed
   const feedList = document.getElementById('feed-list');
   searchResults.forEach((r, i) => {
-    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i+1, r.website, 'idle', null));
+    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i + 1, r.website, 'idle', null));
   });
 
   document.getElementById('header-status-text').textContent = `0 / ${searchResults.length} scraped`;
@@ -585,35 +585,35 @@ async function startGoogleFlow(query) {
     const biz = searchResults[i];
     const url = biz.website;
 
-    const feedEl = document.getElementById(`feed-${i+1}`);
-    if (feedEl) feedEl.outerHTML = buildFeedItem(i+1, url, 'pending', null);
-    document.getElementById(`feed-${i+1}`)?.scrollIntoView({behavior:'smooth', block:'nearest'});
+    const feedEl = document.getElementById(`feed-${i + 1}`);
+    if (feedEl) feedEl.outerHTML = buildFeedItem(i + 1, url, 'pending', null);
+    document.getElementById(`feed-${i + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     document.getElementById('prog-label').textContent = `Scraping ${hostname(url)}…`;
-    document.getElementById('header-status-text').textContent = `${i+1} / ${searchResults.length} scraping`;
+    document.getElementById('header-status-text').textContent = `${i + 1} / ${searchResults.length} scraping`;
     updateProgress(i, searchResults.length);
-    addGoogleTableRow(i+1, biz, null, 'scanning');
+    addGoogleTableRow(i + 1, biz, null, 'scanning');
 
     try {
       const scrapeData = await scrapeUrl(url);
       const merged = { ...biz, ...scrapeData };
       state.results.push(merged);
-      updateGoogleTableRow(i+1, merged, 'done');
-      const el = document.getElementById(`feed-${i+1}`);
-      if (el) el.outerHTML = buildFeedItem(i+1, url, 'done', scrapeData);
-    } catch(err) {
-      const merged = { ...biz, emails:[], phones:[], socials:[], error: err.message };
+      updateGoogleTableRow(i + 1, merged, 'done');
+      const el = document.getElementById(`feed-${i + 1}`);
+      if (el) el.outerHTML = buildFeedItem(i + 1, url, 'done', scrapeData);
+    } catch (err) {
+      const merged = { ...biz, emails: [], phones: [], socials: [], error: err.message };
       state.results.push(merged);
-      updateGoogleTableRow(i+1, merged, 'error');
-      const el = document.getElementById(`feed-${i+1}`);
-      if (el) el.outerHTML = buildFeedItem(i+1, url, 'error', null);
+      updateGoogleTableRow(i + 1, merged, 'error');
+      const el = document.getElementById(`feed-${i + 1}`);
+      if (el) el.outerHTML = buildFeedItem(i + 1, url, 'error', null);
     }
 
-    updateProgress(i+1, searchResults.length);
-    const done     = state.results.length;
-    const withData = state.results.filter(r => r.emails?.length||r.phones?.length||r.socials?.length).length;
+    updateProgress(i + 1, searchResults.length);
+    const done = state.results.length;
+    const withData = state.results.filter(r => r.emails?.length || r.phones?.length || r.socials?.length).length;
     document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
-    document.getElementById('header-status-text').textContent = `${i+1} / ${searchResults.length} scraped`;
+    document.getElementById('header-status-text').textContent = `${i + 1} / ${searchResults.length} scraped`;
   }
 
   finishScan(searchResults.length);
@@ -629,7 +629,7 @@ function finishScan(total) {
     New scan`;
   document.getElementById('run-btn').onclick = resetToInput;
   document.getElementById('dl-btn').disabled = false;
-  showToast(`Done — ${total} site${total!==1?'s':''} scraped`, 'success');
+  showToast(`Done — ${total} site${total !== 1 ? 's' : ''} scraped`, 'success');
 }
 
 function resetToInput() {
@@ -654,7 +654,7 @@ function resetToInput() {
 
 // ── Progress ───────────────────────────────────────────────────────
 function updateProgress(done, total) {
-  const pct = total === 0 ? 0 : Math.round((done/total)*100);
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   document.getElementById('prog-fill').style.width = `${pct}%`;
   document.getElementById('prog-count').textContent = `${done} / ${total}`;
 }
@@ -683,7 +683,7 @@ function addTableRow(idx, url, data, status) {
   tr.id = `row-${idx}`; tr.className = 'row-appear';
   tr.innerHTML = buildRowHTML(idx, url, data, status);
   document.getElementById('results-body').appendChild(tr);
-  tr.scrollIntoView({behavior:'smooth', block:'nearest'});
+  tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 function updateTableRow(idx, url, data, status) {
   const tr = document.getElementById(`row-${idx}`);
@@ -696,7 +696,7 @@ function addGoogleTableRow(idx, biz, scrapeData, status) {
   tr.id = `row-${idx}`; tr.className = 'row-appear';
   tr.innerHTML = buildGoogleRowHTML(idx, biz, scrapeData, status);
   document.getElementById('results-body').appendChild(tr);
-  tr.scrollIntoView({behavior:'smooth', block:'nearest'});
+  tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function updateGoogleTableRow(idx, biz, status) {
@@ -705,13 +705,13 @@ function updateGoogleTableRow(idx, biz, status) {
 }
 
 function buildGoogleRowHTML(idx, biz, scrapeData, status) {
-  const url     = biz.website || '';
-  const host    = hostname(url);
-  const name    = biz.name || host;
-  const desc    = biz.description ? `<div class="site-url-sub" style="max-width:200px;white-space:normal;line-height:1.4;margin-top:2px">${biz.description.slice(0, 80)}…</div>` : '';
+  const url = biz.website || '';
+  const host = hostname(url);
+  const name = biz.name || host;
+  const desc = biz.description ? `<div class="site-url-sub" style="max-width:200px;white-space:normal;line-height:1.4;margin-top:2px">${biz.description.slice(0, 80)}…</div>` : '';
 
-  const emails  = scrapeData?.emails  ?? [];
-  const phones  = scrapeData?.phones  ?? [];
+  const emails = scrapeData?.emails ?? [];
+  const phones = scrapeData?.phones ?? [];
   const socials = scrapeData?.socials ?? [];
 
   let badge = '';
@@ -731,8 +731,8 @@ function buildGoogleRowHTML(idx, biz, scrapeData, status) {
       <div class="site-url-sub">${url}</div>
     </td>
     <td>${badge}</td>
-    <td>${emails.length  ? emails.map(e  => `<span class="data-mono">${e}</span>`).join('')         : `<span class="muted">—</span>`}</td>
-    <td>${phones.length  ? phones.map(p  => `<span class="data-mono">${p}</span>`).join('')         : `<span class="muted">—</span>`}</td>
+    <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${phones.length ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
     <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
 }
 
@@ -740,22 +740,22 @@ function buildGoogleRowHTML(idx, biz, scrapeData, status) {
 function buildRowHTML(idx, url, data, status) {
   const host = hostname(url);
   let badge = '';
-  if (status==='scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
-  else if (status==='error') badge = `<span class="badge badge-error">error</span>`;
-  else if (data && (data.emails.length||data.phones.length||data.socials.length)) badge = `<span class="badge badge-found">found</span>`;
+  if (status === 'scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
+  else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
+  else if (data && (data.emails.length || data.phones.length || data.socials.length)) badge = `<span class="badge badge-found">found</span>`;
   else badge = `<span class="badge badge-empty">empty</span>`;
 
-  const emails  = data?.emails  ?? [];
-  const phones  = data?.phones  ?? [];
+  const emails = data?.emails ?? [];
+  const phones = data?.phones ?? [];
   const socials = data?.socials ?? [];
 
   return `
     <td class="idx-cell">${idx}</td>
     <td><a href="${url}" target="_blank" class="site-name">${host}</a><div class="site-url-sub">${url}</div></td>
     <td>${badge}</td>
-    <td>${emails.length ? emails.map(e=>`<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${phones.length ? phones.map(p=>`<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${socials.length ? socials.map(s=>`<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
+    <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${phones.length ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
 }
 
 function downloadCSV() {
@@ -766,17 +766,17 @@ function downloadCSV() {
   if (state.activeTab === 'maps') {
     // Maps mode — full business profile + scraped contacts
     csv += ['Business Name', 'Address', 'Phone', 'Rating', 'Reviews',
-            'Website', 'Emails', 'Social Links']
+      'Website', 'Emails', 'Social Links']
       .map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
       csv += [
-        r.name        ?? '',
-        r.address     ?? '',
-        r.phone       ?? '',
-        r.rating      ?? '',
-        r.reviews     ?? '',
-        r.website     ?? '',
-        r.emails?.join(' | ')                  ?? '',
+        r.name ?? '',
+        r.address ?? '',
+        r.phone ?? '',
+        r.rating ?? '',
+        r.reviews ?? '',
+        r.website ?? '',
+        r.emails?.join(' | ') ?? '',
         r.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
@@ -786,11 +786,11 @@ function downloadCSV() {
       .map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
       csv += [
-        r.name        ?? '',
-        r.website     ?? '',
+        r.name ?? '',
+        r.website ?? '',
         r.description ?? '',
-        r.emails?.join(' | ')                  ?? '',
-        r.phones?.join(' | ')                  ?? '',
+        r.emails?.join(' | ') ?? '',
+        r.phones?.join(' | ') ?? '',
         r.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
@@ -800,12 +800,12 @@ function downloadCSV() {
     csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'Social Links']
       .map(csvEscape).join(',') + '\n';
     state.csvData.forEach(row => {
-      const url    = (row[colIdx] || '').trim();
+      const url = (row[colIdx] || '').trim();
       const result = state.results.find(r => r.url === url);
       csv += [
         ...row,
-        result?.emails?.join(' | ')                  ?? '',
-        result?.phones?.join(' | ')                  ?? '',
+        result?.emails?.join(' | ') ?? '',
+        result?.phones?.join(' | ') ?? '',
         result?.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
@@ -815,17 +815,17 @@ function downloadCSV() {
     state.results.forEach(r => {
       csv += [
         r.url,
-        r.emails?.join(' | ')                  ?? '',
-        r.phones?.join(' | ')                  ?? '',
+        r.emails?.join(' | ') ?? '',
+        r.phones?.join(' | ') ?? '',
         r.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
   }
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), {
-    href:     url,
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), {
+    href: url,
     download: `webtrace-${state.activeTab}-${datestamp()}.csv`,
   });
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -845,5 +845,5 @@ function showToast(msg, type = 'info') {
   const t = document.createElement('div');
   t.className = `toast toast-${type}`; t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateY(6px)'; setTimeout(()=>t.remove(), 300); }, 3000);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(6px)'; setTimeout(() => t.remove(), 300); }, 3000);
 }
