@@ -1,21 +1,18 @@
-import asyncio
 import re
+import time
 import threading
+import asyncio
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
 # ── Constants ─────────────────────────────────────────────────────
 PAGE_TIMEOUT = 30_000
-SCROLL_PAUSE = 1.5
+SCROLL_PAUSE = 2.0
 MAX_SCROLLS  = 30
 
-# ── Main entry point ──────────────────────────────────────────────
+# ── Main entry point (async wrapper for FastAPI) ──────────────────
 
 async def scrape_maps(url: str, max_results: int = 20) -> dict:
-    """
-    Run the Playwright scrape in a background thread with its own
-    event loop — avoids the Windows ProactorEventLoop conflict with uvicorn.
-    """
     result_container = {}
 
     def run_in_thread():
@@ -26,15 +23,12 @@ async def scrape_maps(url: str, max_results: int = 20) -> dict:
 
     thread = threading.Thread(target=run_in_thread)
     thread.start()
-
-    # Wait for the thread without blocking the async event loop
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, thread.join)
-
     return result_container.get('data', {"results": [], "error": "Thread failed"})
 
 
-# ── Sync Playwright scrape (runs inside its own thread) ───────────
+# ── Sync Playwright scrape ────────────────────────────────────────
 
 def _scrape_maps_sync(url: str, max_results: int) -> dict:
     results = []
@@ -43,18 +37,16 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=False,   # visible so Google doesn't block us
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-blink-features=AutomationControlled",
-                    "--disable-infobars",
-                    "--window-size=1280,800",
                 ],
             )
 
             context = browser.new_context(
-                viewport={"width": 1280, "height": 800},
+                viewport={"width": 1400, "height": 900},
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -65,28 +57,29 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
 
             page = context.new_page()
 
-            # Block images/fonts to speed up loading
-            page.route(
-                "**/*",
-                lambda route: route.abort()
-                if route.request.resource_type in ("image", "font", "media")
-                else route.continue_(),
-            )
-
-            # Navigate to Maps URL
+            # Navigate
             page.goto(url, timeout=PAGE_TIMEOUT, wait_until="domcontentloaded")
 
-            # Wait for results panel
+            # Dismiss cookie/consent dialog if it appears
             try:
-                page.wait_for_selector(
-                    'div[role="feed"], div.section-result, a[href*="/maps/place/"]',
-                    timeout=PAGE_TIMEOUT,
-                )
+                page.click('button:has-text("Accept all")', timeout=4000)
+            except Exception:
+                pass
+            try:
+                page.click('button:has-text("Reject all")', timeout=2000)
+            except Exception:
+                pass
+
+            # Wait for results feed
+            try:
+                page.wait_for_selector('div[role="feed"]', timeout=PAGE_TIMEOUT)
             except Exception:
                 browser.close()
                 return {"results": [], "error": "Maps results panel did not load — check the URL"}
 
-            # Scroll and extract
+            # Extra wait for content to settle
+            time.sleep(2)
+
             results = _scroll_and_extract(page, max_results)
             browser.close()
 
@@ -96,52 +89,65 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
     return {"results": results, "error": error}
 
 
-# ── Scroll + extract (sync) ───────────────────────────────────────
+# ── Scroll + extract ──────────────────────────────────────────────
 
 def _scroll_and_extract(page, max_results: int) -> list:
     seen_names = set()
     results    = []
     scrolls    = 0
-    feed_selector = 'div[role="feed"]'
+    no_new_count = 0  # stop if we keep getting no new results
 
     while scrolls < MAX_SCROLLS and len(results) < max_results:
-        cards = page.query_selector_all(
-            'div[role="feed"] > div, a[href*="/maps/place/"]'
-        )
+        count_before = len(results)
+
+        # Each result card is an <a> tag linking to a Maps place
+        cards = page.query_selector_all('div[role="feed"] a[href*="/maps/place/"]')
 
         for card in cards:
             if len(results) >= max_results:
                 break
-            listing = _extract_listing(card)
+            listing = _extract_listing(card, page)
             if listing and listing["name"] and listing["name"] not in seen_names:
                 seen_names.add(listing["name"])
                 results.append(listing)
 
-        # Check for end-of-list marker
-        end_el = page.query_selector("span.HlvSq")
-        if end_el:
-            break
+        # Check end-of-list
+        end_markers = [
+            "span.HlvSq",
+            "p.fontBodyMedium span",
+        ]
+        for marker in end_markers:
+            end_el = page.query_selector(marker)
+            if end_el and "end of" in (end_el.inner_text() or "").lower():
+                return results
 
-        # Scroll the feed panel down
+        # Scroll the feed
         try:
-            feed = page.query_selector(feed_selector)
+            feed = page.query_selector('div[role="feed"]')
             if feed:
-                feed.evaluate("el => el.scrollBy(0, 800)")
+                feed.evaluate("el => el.scrollBy(0, 1000)")
             else:
-                page.evaluate("window.scrollBy(0, 800)")
+                page.evaluate("window.scrollBy(0, 1000)")
         except Exception:
             pass
 
-        import time
         time.sleep(SCROLL_PAUSE)
         scrolls += 1
+
+        # If no new results found after scrolling, count strikes
+        if len(results) == count_before:
+            no_new_count += 1
+            if no_new_count >= 3:
+                break
+        else:
+            no_new_count = 0
 
     return results
 
 
-# ── Extract single listing (sync) ─────────────────────────────────
+# ── Extract single listing ────────────────────────────────────────
 
-def _extract_listing(card) -> dict | None:
+def _extract_listing(card, page) -> dict | None:
     try:
         item = {
             "name":    "",
@@ -152,57 +158,117 @@ def _extract_listing(card) -> dict | None:
             "website": "",
         }
 
-        # Name
+        # ── Name ──
+        # aria-label on the <a> card is the most reliable source
         name = card.get_attribute("aria-label")
-        if not name:
-            for sel in [".qBF1Pd", ".fontHeadlineSmall", "h3", '[jsan*="t_kObpd"]']:
-                el = card.query_selector(sel)
-                if el:
-                    name = el.inner_text()
-                    break
-
-        if not name or not name.strip():
+        if name:
+            item["name"] = name.strip()
+        else:
             return None
-        item["name"] = name.strip()
 
-        # Rating
-        for sel in [".MW4etd", 'span[aria-hidden="true"]']:
-            el = card.query_selector(sel)
-            if el:
-                text = el.inner_text()
-                if re.match(r"^\d\.\d$", text.strip()):
-                    item["rating"] = text.strip()
+        # ── Get the full text content of the card for parsing ──
+        card_text = card.inner_text()
+        lines = [l.strip() for l in card_text.split('\n') if l.strip()]
+
+        # ── Rating ──
+        for line in lines:
+            # Matches "4.5" or "4.5(123)"
+            m = re.match(r'^(\d\.\d)', line)
+            if m:
+                item["rating"] = m.group(1)
+                # Try to get review count from same line e.g. "4.5(1,234)"
+                rev = re.search(r'\(([0-9,]+)\)', line)
+                if rev:
+                    item["reviews"] = rev.group(1).replace(',', '')
+                break
+
+        # ── Reviews (fallback — look for standalone count) ──
+        if not item["reviews"]:
+            for line in lines:
+                m = re.search(r'\(([0-9,]+)\)', line)
+                if m:
+                    item["reviews"] = m.group(1).replace(',', '')
                     break
 
-        # Reviews
-        for sel in [".UY7F9", 'span[aria-label*="review"]']:
-            el = card.query_selector(sel)
-            if el:
-                text = el.inner_text().strip()
-                clean = re.sub(r"[(),\s]", "", text)
-                if clean.isdigit():
-                    item["reviews"] = clean
-                    break
+        # ── Address ──
+        # Look for lines that look like addresses
+        for line in lines:
+            if re.search(r'\d+\s+\w+', line) and re.search(
+                r'\b(St|Ave|Rd|Blvd|Dr|Ln|Way|Pl|Fwy|Hwy|Pkwy|Ct|Cir|Blvd|Suite|Ste|#)\b',
+                line, re.I
+            ):
+                item["address"] = line
+                break
 
-        # Address / phone
-        for sel in [".W4Efsd", ".Io6YTe", ".fontBodyMedium"]:
-            els = card.query_selector_all(sel)
-            for el in els:
-                text = el.inner_text().strip()
-                if re.search(r"\(?\d{3}\)?[\s\-]\d{3}[\s\-]\d{4}", text):
-                    item["phone"] = text
-                elif re.search(r"\d+\s+\w+|Ave|St|Rd|Blvd|Dr|Ln|Way|Pl", text, re.I):
-                    if not item["address"]:
-                        item["address"] = text
+        # ── Phone ──
+        for line in lines:
+            if re.search(r'\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}', line):
+                item["phone"] = line.strip()
+                break
 
-        # Website
-        for sel in ['a[data-value="Website"]', 'a[aria-label*="website" i]']:
-            el = card.query_selector(sel)
-            if el:
-                href = el.get_attribute("href")
-                if href and href.startswith("http"):
-                    item["website"] = href
-                    break
+        # ── Website ──
+        # Try clicking the listing to open its detail panel
+        # and grab the website link from there
+        try:
+            card.click()
+            time.sleep(1.5)
+
+            # Website button in the detail panel
+            website_selectors = [
+                'a[data-item-id*="authority"]',
+                'a[aria-label*="website" i]',
+                'a[data-tooltip*="website" i]',
+                'a[href*="http"]:not([href*="google"])',
+            ]
+            for sel in website_selectors:
+                el = page.query_selector(sel)
+                if el:
+                    href = el.get_attribute("href")
+                    if href and href.startswith("http") and "google" not in href:
+                        item["website"] = href
+                        break
+
+            # Also try to get phone from detail panel (more reliable)
+            phone_selectors = [
+                'button[data-item-id*="phone"] .fontBodyMedium',
+                'button[aria-label*="phone" i]',
+                '[data-tooltip*="phone" i]',
+            ]
+            for sel in phone_selectors:
+                el = page.query_selector(sel)
+                if el:
+                    phone_text = el.inner_text().strip()
+                    if phone_text:
+                        item["phone"] = phone_text
+                        break
+
+            # Also grab address from detail panel
+            address_selectors = [
+                'button[data-item-id*="address"] .fontBodyMedium',
+                'button[aria-label*="address" i]',
+            ]
+            for sel in address_selectors:
+                el = page.query_selector(sel)
+                if el:
+                    addr_text = el.inner_text().strip()
+                    if addr_text:
+                        item["address"] = addr_text
+                        break
+
+            # Go back to results list
+            page.go_back(timeout=PAGE_TIMEOUT, wait_until="domcontentloaded")
+            time.sleep(1.5)
+
+            # Re-wait for feed
+            page.wait_for_selector('div[role="feed"]', timeout=10_000)
+
+        except Exception:
+            # If click/back fails, just return what we have
+            try:
+                page.go_back(timeout=5000, wait_until="domcontentloaded")
+                time.sleep(1)
+            except Exception:
+                pass
 
         return item
 
