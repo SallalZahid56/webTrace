@@ -47,12 +47,15 @@ class MapsRequest(BaseModel):
     max_results: int = 20
 
 class MapsBusinessResult(BaseModel):
-    name:    str
-    address: str
-    phone:   str
-    rating:  str
-    reviews: str
-    website: str
+    name:      str
+    address:   str
+    phone:     str
+    rating:    str
+    reviews:   str
+    website:   str
+    facebook:  str = ""
+    instagram: str = ""
+    linkedin:  str = ""
 
 class MapsResponse(BaseModel):
     url:     str

@@ -424,7 +424,9 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
     <td>${badge}</td>
     <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
     <td>${phones.length ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
+    <td>${biz.facebook ? `<a href="${biz.facebook}"  target="_blank" class="social-a">Facebook</a>` : `<span class="muted">—</span>`}</td>
+<td>${biz.instagram ? `<a href="${biz.instagram}" target="_blank" class="social-a">Instagram</a>` : `<span class="muted">—</span>`}</td>
+<td>${biz.linkedin ? `<a href="${biz.linkedin}"  target="_blank" class="social-a">LinkedIn</a>` : `<span class="muted">—</span>`}</td>`;
 }
 
 // ── Main scraping loop ─────────────────────────────────────────────
@@ -669,7 +671,7 @@ function buildTableHead(mode) {
   if (mode === 'google') {
     cols = ['#', 'Business', 'Website', 'Status', 'Emails', 'Phones', 'Socials'];
   } else if (mode === 'maps') {
-    cols = ['#', 'Business', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Socials'];
+    cols = ['#', 'Business', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Facebook', 'Instagram', 'LinkedIn'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'Socials'];
   }
@@ -766,7 +768,7 @@ function downloadCSV() {
   if (state.activeTab === 'maps') {
     // Maps mode — full business profile + scraped contacts
     csv += ['Business Name', 'Address', 'Phone', 'Rating', 'Reviews',
-      'Website', 'Emails', 'Social Links']
+      'Website', 'Emails', 'Facebook', 'Instagram', 'LinkedIn']
       .map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
       csv += [
@@ -777,7 +779,9 @@ function downloadCSV() {
         r.reviews ?? '',
         r.website ?? '',
         r.emails?.join(' | ') ?? '',
-        r.socials?.map(s => s.url).join(' | ') ?? '',
+        r.facebook ?? '',
+        r.instagram ?? '',
+        r.linkedin ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
 
