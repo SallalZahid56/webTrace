@@ -10,6 +10,14 @@ PAGE_TIMEOUT = 30_000
 SCROLL_PAUSE = 2.0
 MAX_SCROLLS  = 30
 
+# ── Strip icon garbage characters from Maps text ──────────────────
+def _clean(text: str) -> str:
+    """Remove Material Icon characters and other junk that inner_text() picks up."""
+    # Remove non-ASCII and control characters except common punctuation
+    text = re.sub(r'[^\x20-\x7E\u00C0-\u024F]', '', text)
+    # Remove any leftover leading/trailing whitespace
+    return text.strip()
+
 # ── Main entry point (async wrapper for FastAPI) ──────────────────
 
 async def scrape_maps(url: str, max_results: int = 20) -> dict:
@@ -177,7 +185,7 @@ def _extract_detail(page, name: str, href: str) -> dict | None:
         except Exception:
             pass
 
-        # ── Address ──
+       # ── Address ──
         try:
             for sel in [
                 'button[data-item-id*="address"]',
@@ -185,7 +193,7 @@ def _extract_detail(page, name: str, href: str) -> dict | None:
             ]:
                 el = page.query_selector(sel)
                 if el:
-                    item["address"] = el.inner_text().strip()
+                    item["address"] = _clean(el.inner_text())
                     break
         except Exception:
             pass
@@ -198,7 +206,7 @@ def _extract_detail(page, name: str, href: str) -> dict | None:
             ]:
                 el = page.query_selector(sel)
                 if el:
-                    text = el.inner_text().strip()
+                    text = _clean(el.inner_text())
                     if re.search(r'\d{3}', text):
                         item["phone"] = text
                         break

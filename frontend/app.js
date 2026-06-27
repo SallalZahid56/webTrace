@@ -406,7 +406,7 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
   let badge = '';
   if (status === 'scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
   else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
-  else if (emails.length || phones.length || socials.length) badge = `<span class="badge badge-found">found</span>`;
+  else if (emails.length || phones.length || socials.length || biz.facebook || biz.instagram || biz.linkedin) badge = `<span class="badge badge-found">found</span>`;
   else badge = `<span class="badge badge-empty">empty</span>`;
 
   const websiteCell = url
@@ -417,8 +417,8 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
     <td class="idx-cell">${idx}</td>
     <td>
       <div style="font-size:12px;font-weight:500;color:var(--slate-800)">${name}</div>
-      <div class="site-url-sub" style="margin-top:2px">${address}</div>
     </td>
+    <td><span style="font-size:11px;color:var(--slate-500)">${address}</span></td>
     <td><span style="font-size:11px;color:var(--slate-600)">${rating} ${reviews}</span></td>
     <td>${websiteCell}</td>
     <td>${badge}</td>
@@ -671,7 +671,7 @@ function buildTableHead(mode) {
   if (mode === 'google') {
     cols = ['#', 'Business', 'Website', 'Status', 'Emails', 'Phones', 'Socials'];
   } else if (mode === 'maps') {
-    cols = ['#', 'Business', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Facebook', 'Instagram', 'LinkedIn'];
+    cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Facebook', 'Instagram', 'LinkedIn'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'Socials'];
   }
