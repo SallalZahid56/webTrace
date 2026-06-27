@@ -408,7 +408,7 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
   else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
   else if (emails.length || phones.length || socials.length || biz.facebook || biz.instagram || biz.linkedin) badge = `<span class="badge badge-found">found</span>`;
   else badge = `<span class="badge badge-empty">empty</span>`;
-
+ 
   const websiteCell = url
     ? `<a href="${url}" target="_blank" class="site-name">${hostname(url)}</a><div class="site-url-sub">${url}</div>`
     : `<span class="muted">No website</span>`;
