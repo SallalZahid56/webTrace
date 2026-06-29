@@ -1,22 +1,31 @@
 # WebTrace
 
-WebTrace is a small web-scraping + API project that extracts emails, phone numbers, and social links from a target website. It provides a FastAPI backend and a minimal frontend in the `frontend/` folder.
+WebTrace is a lightweight web-scraping project that helps you collect contact details such as emails, phone numbers, and social links from websites. It includes a FastAPI backend plus a browser-based frontend for scraping one URL, many URLs, or a CSV file.
 
-## Repo structure
+## What the project does
 
-- `backend/` — FastAPI backend
-  - `main.py` — API routes
-  - `scraper.py` — scraping logic (exports `scrape_url`)
-  - `requirements.txt` — Python dependencies
-- `frontend/` — static frontend
-  - `index.html`, `app.js`, `style.css`
+- Scrapes a target website for contact-related data
+- Supports batch scanning from pasted URLs or uploaded CSV files
+- Includes a Google-style search tab in the UI for a search-and-scrape workflow
+- Exports results as CSV for easy downstream use
+
+## Project structure
+
+- backend/
+  - main.py — FastAPI app and routes
+  - scraper.py — website scraping logic
+  - google_scraper.py — search-result helper (currently uses DuckDuckGo HTML results)
+  - requirements.txt — Python dependencies
+- frontend/
+  - index.html — app layout
+  - app.js — frontend logic and API calls
+  - style.css — styling
 
 ## Requirements
 
-- Python 3.11+ recommended
-- `pip` available
-
-The backend dependencies are listed in `backend/requirements.txt`.
+- Python 3.10+ recommended
+- pip
+- A modern browser
 
 ## Quick start (Windows)
 
@@ -35,32 +44,38 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-3. Run the backend (development)
+3. Run the backend
 
 ```powershell
-# from backend/
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-4. Serve the frontend (open `frontend/index.html` or run a simple server)
+4. Serve the frontend
 
 ```powershell
-# from frontend/
+cd ..\frontend
 python -m http.server 3000
-# then open http://localhost:3000 in your browser
 ```
 
-Or use the VS Code Live Server extension to serve `frontend/`.
+Then open http://localhost:3000 in your browser.
 
 ## API
 
-Base URL (development): `http://127.0.0.1:8000`
+Base URL:
 
-- `GET /` — health/status
-- `POST /scrape` — run a scrape
-- `POST /search` — search (DuckDuckGo) + scrape results (see Google/DuckDuckGo flow)
+```text
+http://127.0.0.1:8000
+```
 
-Request JSON for `/scrape`:
+### GET /
+
+Health check endpoint.
+
+### POST /scrape
+
+Scrapes a single URL and returns contact data.
+
+Request body:
 
 ```json
 {
@@ -70,88 +85,57 @@ Request JSON for `/scrape`:
 }
 ```
 
-Response model (`ScrapeResponse`):
+Response:
 
 ```json
 {
   "url": "https://example.com",
   "emails": ["info@example.com"],
   "phones": ["+1-555-555-5555"],
-  "socials": [{"platform":"twitter","url":"https://twitter.com/example"}],
+  "socials": [{"platform": "twitter", "url": "https://twitter.com/example"}],
   "error": null
 }
 ```
 
-Example curl call:
+### Search flow
 
-```bash
-curl -X POST "http://127.0.0.1:8000/scrape" -H "Content-Type: application/json" -d '{"url":"https://example.com"}'
+The frontend includes a Google Search tab. The search helper in backend/google_scraper.py is currently built around DuckDuckGo's HTML results page, so the flow is a search-and-scrape experience rather than a direct Google API integration.
 
-### Search + scrape (Google-style flow)
+## Frontend usage
 
-The project includes a search flow (implemented using `backend/google_scraper.py`) that performs an HTML search query against DuckDuckGo, then scrapes each returned website for contact data using the same scraping logic in `scraper.py`.
+- Paste URLs one per line in the URL tab
+- Upload a CSV file in the CSV tab and choose the URL column
+- Use the Google Search tab to enter a query and start a search-driven scrape
+- Results appear in the table and can be exported as CSV
 
-Endpoint: `POST /search`
+## Troubleshooting
 
-Request JSON:
+### Pylance import errors
 
-```json
-{
-  "query": "Plumbers in Houston TX",
-  "num_results": 10,
-  "check_contact_page": true,
-  "deduplicate_emails": true
-}
-```
+If VS Code shows errors such as "Import fastapi could not be resolved", make sure you:
 
-Response (summary):
-
-```json
-{
-  "results": [
-    {
-      "name": "Example Business",
-      "website": "https://example.com",
-      "description": "...",
-      "emails": ["info@example.com"],
-      "phones": ["+1-555-555-5555"],
-      "socials": [{"platform":"twitter","url":"https://twitter.com/example"}],
-      "error": null
-    }
-  ],
-  "error": null
-}
-```
-
-Notes:
-- The current `google_scraper.py` fetches HTML results from DuckDuckGo's lightweight HTML endpoint and parses result blocks; the filename contains "google" for historical reasons.
-- Be mindful of rate limits and blocking when running many queries; the scraper adds small delays and rotates user agents, but abusing search endpoints may trigger CAPTCHAs or blocks.
-- Respect robots.txt and the target sites' terms of service when scraping.
-```
-
-## Troubleshooting: Pylance "Import could not be resolved"
-
-If VS Code's Pylance reports errors like `Import "fastapi" could not be resolved`:
-
-- Ensure you have activated the workspace Python interpreter that points to the virtual environment where you installed dependencies.
-  - Open the Command Palette → `Python: Select Interpreter` → choose the `.venv` you created in `backend/`.
-- Install the requirements into that environment:
+- Select the correct Python interpreter for the project
+- Activate the virtual environment and install requirements again
 
 ```powershell
-# from backend/ with the venv active
+cd backend
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-- Restart the Python language server or reload the VS Code window if Pylance still shows missing imports.
+### Backend not reachable from the frontend
+
+If the UI reports that it cannot reach the backend, confirm that the FastAPI server is running on port 8000.
+
+```powershell
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
 
 ## Notes
 
-- `backend/main.py` expects `scraper.py` to export an `async def scrape_url(...)` coroutine. Adjust invocation if you change the scraper signature.
-- CORS is permissive for local development (`allow_origins: ["*"]`). Lock this down for production.
-
-## Contributing
-
-PRs welcome. Please open issues for bugs or feature requests.
+- The scraper is intentionally simple and may miss some sites depending on their HTML structure.
+- Respect site terms of service and robots rules when scraping.
+- CORS is currently permissive for local development; tighten it before production use.
 
 ## License
 
