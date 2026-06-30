@@ -254,6 +254,19 @@ function buildFeedItem(idx, url, status, data) {
     </div>`;
 }
 
+function extractSocialsByPlatform(socials) {
+  const out = { facebook: '', instagram: '', linkedin: '' };
+  if (!Array.isArray(socials)) return out;
+  socials.forEach(s => {
+    const platform = (s.platform || '').toLowerCase();
+    const url = s.url || '';
+    if (platform.includes('facebook') && !out.facebook) out.facebook = url;
+    else if (platform.includes('instagram') && !out.instagram) out.instagram = url;
+    else if (platform.includes('linkedin') && !out.linkedin) out.linkedin = url;
+  });
+  return out;
+}
+
 
 // ── Maps flow ──────────────────────────────────────────────────────
 async function startMapsFlow(mapsUrl) {
@@ -340,7 +353,15 @@ async function startMapsFlow(mapsUrl) {
     if (url) {
       try {
         const scrapeData = await scrapeUrl(url);
-        const merged = { ...biz, emails: scrapeData.emails, phones: scrapeData.phones, socials: scrapeData.socials };
+        const extractedSocials = extractSocialsByPlatform(scrapeData.socials);
+        const merged = {
+          ...biz,
+          emails: scrapeData.emails,
+          phones: scrapeData.phones,
+          facebook: biz.facebook || extractedSocials.facebook,
+          instagram: biz.instagram || extractedSocials.instagram,
+          linkedin: biz.linkedin || extractedSocials.linkedin,
+        };
         state.results.push(merged);
         updateMapsTableRow(i + 1, merged, 'done');
         const el = document.getElementById(`feed-${i + 1}`);
@@ -354,7 +375,7 @@ async function startMapsFlow(mapsUrl) {
       }
     } else {
       // No website — still show the Maps data we have
-      const merged = { ...biz, emails: [], phones: [], socials: [] };
+      const merged = { ...biz, emails: [], phones: [] };
       state.results.push(merged);
       updateMapsTableRow(i + 1, merged, 'done');
       const el = document.getElementById(`feed-${i + 1}`);
@@ -408,7 +429,7 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
   else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
   else if (emails.length || phones.length || socials.length || biz.facebook || biz.instagram || biz.linkedin) badge = `<span class="badge badge-found">found</span>`;
   else badge = `<span class="badge badge-empty">empty</span>`;
- 
+
   const websiteCell = url
     ? `<a href="${url}" target="_blank" class="site-name">${hostname(url)}</a><div class="site-url-sub">${url}</div>`
     : `<span class="muted">No website</span>`;
