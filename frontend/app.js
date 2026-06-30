@@ -16,13 +16,11 @@ function switchTab(tab) {
   // Toggle tab buttons
   document.getElementById('tab-urls').classList.toggle('active', tab === 'urls');
   document.getElementById('tab-csv').classList.toggle('active', tab === 'csv');
-  document.getElementById('tab-google').classList.toggle('active', tab === 'google');
   document.getElementById('tab-maps').classList.toggle('active', tab === 'maps');
 
   // Toggle panels
   document.getElementById('panel-urls').style.display = tab === 'urls' ? 'block' : 'none';
   document.getElementById('panel-csv').style.display = tab === 'csv' ? 'block' : 'none';
-  document.getElementById('panel-google').style.display = tab === 'google' ? 'block' : 'none';
   document.getElementById('panel-maps').style.display = tab === 'maps' ? 'block' : 'none';
 
   // Hide options section in Google and Maps mode
@@ -31,11 +29,7 @@ function switchTab(tab) {
 
   // Update run button label per tab
   const runBtn = document.getElementById('run-btn');
-  if (tab === 'google') {
-    runBtn.innerHTML = `
-      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      Search & scrape`;
-  } else if (tab === 'maps') {
+  if (tab === 'maps') {
     runBtn.innerHTML = `
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/></svg>
       Scrape Maps`;
@@ -59,37 +53,6 @@ function clearUrls() {
 function parseUrlText(text) {
   return text.split('\n').map(l => l.trim())
     .filter(l => l.startsWith('http://') || l.startsWith('https://'));
-}
-
-// ── Google Search UI ───────────────────────────────────────────────
-function updateGoogleMeta() {
-  const query = document.getElementById('google-query').value.trim();
-  const hint = document.getElementById('google-query-hint');
-  const num = parseInt(document.getElementById('google-num-results').value, 10);
-
-  if (!query) {
-    hint.textContent = 'Type a business + location';
-    return;
-  }
-
-  const wordCount = query.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 2) {
-    hint.textContent = 'Try adding a location — e.g. "Plumbers in Houston TX"';
-    return;
-  }
-
-  hint.textContent = `Will search DuckDuckGo for "${query}" · scrape top ${num} sites`;
-}
-
-function setNumResults(btn) {
-  // Remove active from all chips
-  document.querySelectorAll('.num-chip').forEach(c => c.classList.remove('active'));
-  // Set active on clicked chip
-  btn.classList.add('active');
-  // Update hidden input
-  document.getElementById('google-num-results').value = btn.dataset.val;
-  // Refresh hint text
-  updateGoogleMeta();
 }
 
 
@@ -454,14 +417,6 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
 async function startScraping() {
   if (state.isRunning) return;
 
-  // ── Google mode ──
-  if (state.activeTab === 'google') {
-    const query = document.getElementById('google-query').value.trim();
-    if (!query) { showToast('Please enter a search query.', 'error'); return; }
-    await startGoogleFlow(query);
-    return;
-  }
-
   // ── Maps mode ──
   if (state.activeTab === 'maps') {
     const mapsUrl = document.getElementById('maps-url-input').value.trim();
@@ -539,109 +494,6 @@ async function startScraping() {
   finishScan(urls.length);
 }
 
-// ── Google two-phase flow ──────────────────────────────────────────
-async function startGoogleFlow(query) {
-  const numResults = parseInt(document.getElementById('google-num-results').value, 10);
-
-  try {
-    const ping = await fetch(`${API_BASE}/`);
-    if (!ping.ok) throw new Error();
-  } catch {
-    showToast('Cannot reach backend. Is uvicorn running on port 8000?', 'error');
-    return;
-  }
-
-  state.isRunning = true;
-  state.results = [];
-
-  // Switch UI to scan mode
-  document.getElementById('input-section').style.display = 'none';
-  document.getElementById('activity-feed').classList.add('show');
-  document.getElementById('run-btn').disabled = true;
-  document.getElementById('header-status').classList.add('show');
-  document.getElementById('header-status-text').textContent = 'Searching…';
-  document.getElementById('progress-strip').classList.add('show');
-  document.getElementById('prog-label').textContent = `Searching DuckDuckGo for "${query}"…`;
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('table-wrap').style.display = 'block';
-  buildTableHead('google');
-  document.getElementById('results-body').innerHTML = '';
-  document.getElementById('feed-list').innerHTML = '';
-
-  // ── Phase A: DuckDuckGo search ──
-  let searchResults = [];
-  try {
-    const res = await fetch(`${API_BASE}/google-search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, num_results: numResults }),
-    });
-    const data = await res.json();
-    if (data.error && !data.results?.length) {
-      showToast(`Search error: ${data.error}`, 'error');
-      resetToInput();
-      return;
-    }
-    searchResults = data.results || [];
-  } catch (err) {
-    showToast('Failed to reach search endpoint.', 'error');
-    resetToInput();
-    return;
-  }
-
-  if (!searchResults.length) {
-    showToast('No results found for that query.', 'error');
-    resetToInput();
-    return;
-  }
-
-  // Pre-populate feed
-  const feedList = document.getElementById('feed-list');
-  searchResults.forEach((r, i) => {
-    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i + 1, r.website, 'idle', null));
-  });
-
-  document.getElementById('header-status-text').textContent = `0 / ${searchResults.length} scraped`;
-
-  // ── Phase B: scrape each website for contacts ──
-  for (let i = 0; i < searchResults.length; i++) {
-    const biz = searchResults[i];
-    const url = biz.website;
-
-    const feedEl = document.getElementById(`feed-${i + 1}`);
-    if (feedEl) feedEl.outerHTML = buildFeedItem(i + 1, url, 'pending', null);
-    document.getElementById(`feed-${i + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    document.getElementById('prog-label').textContent = `Scraping ${hostname(url)}…`;
-    document.getElementById('header-status-text').textContent = `${i + 1} / ${searchResults.length} scraping`;
-    updateProgress(i, searchResults.length);
-    addGoogleTableRow(i + 1, biz, null, 'scanning');
-
-    try {
-      const scrapeData = await scrapeUrl(url);
-      const merged = { ...biz, ...scrapeData };
-      state.results.push(merged);
-      updateGoogleTableRow(i + 1, merged, 'done');
-      const el = document.getElementById(`feed-${i + 1}`);
-      if (el) el.outerHTML = buildFeedItem(i + 1, url, 'done', scrapeData);
-    } catch (err) {
-      const merged = { ...biz, emails: [], phones: [], socials: [], error: err.message };
-      state.results.push(merged);
-      updateGoogleTableRow(i + 1, merged, 'error');
-      const el = document.getElementById(`feed-${i + 1}`);
-      if (el) el.outerHTML = buildFeedItem(i + 1, url, 'error', null);
-    }
-
-    updateProgress(i + 1, searchResults.length);
-    const done = state.results.length;
-    const withData = state.results.filter(r => r.emails?.length || r.phones?.length || r.socials?.length).length;
-    document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
-    document.getElementById('header-status-text').textContent = `${i + 1} / ${searchResults.length} scraped`;
-  }
-
-  finishScan(searchResults.length);
-}
-
 // ── Shared finish helper ───────────────────────────────────────────
 function finishScan(total) {
   state.isRunning = false;
@@ -689,9 +541,7 @@ function buildTableHead(mode) {
 
   let cols = [];
 
-  if (mode === 'google') {
-    cols = ['#', 'Business', 'Website', 'Status', 'Emails', 'Phones', 'Socials'];
-  } else if (mode === 'maps') {
+  if (mode === 'maps') {
     cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Facebook', 'Instagram', 'LinkedIn'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'Socials'];
@@ -711,52 +561,6 @@ function addTableRow(idx, url, data, status) {
 function updateTableRow(idx, url, data, status) {
   const tr = document.getElementById(`row-${idx}`);
   if (tr) tr.innerHTML = buildRowHTML(idx, url, data, status);
-}
-
-// ── Google-mode table rows ─────────────────────────────────────────
-function addGoogleTableRow(idx, biz, scrapeData, status) {
-  const tr = document.createElement('tr');
-  tr.id = `row-${idx}`; tr.className = 'row-appear';
-  tr.innerHTML = buildGoogleRowHTML(idx, biz, scrapeData, status);
-  document.getElementById('results-body').appendChild(tr);
-  tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function updateGoogleTableRow(idx, biz, status) {
-  const tr = document.getElementById(`row-${idx}`);
-  if (tr) tr.innerHTML = buildGoogleRowHTML(idx, biz, biz, status);
-}
-
-function buildGoogleRowHTML(idx, biz, scrapeData, status) {
-  const url = biz.website || '';
-  const host = hostname(url);
-  const name = biz.name || host;
-  const desc = biz.description ? `<div class="site-url-sub" style="max-width:200px;white-space:normal;line-height:1.4;margin-top:2px">${biz.description.slice(0, 80)}…</div>` : '';
-
-  const emails = scrapeData?.emails ?? [];
-  const phones = scrapeData?.phones ?? [];
-  const socials = scrapeData?.socials ?? [];
-
-  let badge = '';
-  if (status === 'scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
-  else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
-  else if (emails.length || phones.length || socials.length) badge = `<span class="badge badge-found">found</span>`;
-  else badge = `<span class="badge badge-empty">empty</span>`;
-
-  return `
-    <td class="idx-cell">${idx}</td>
-    <td>
-      <div style="font-size:12px;font-weight:500;color:var(--slate-800)">${name}</div>
-      ${desc}
-    </td>
-    <td>
-      <a href="${url}" target="_blank" class="site-name">${host}</a>
-      <div class="site-url-sub">${url}</div>
-    </td>
-    <td>${badge}</td>
-    <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${phones.length ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
 }
 
 
@@ -803,20 +607,6 @@ function downloadCSV() {
         r.facebook ?? '',
         r.instagram ?? '',
         r.linkedin ?? '',
-      ].map(csvEscape).join(',') + '\n';
-    });
-
-  } else if (state.activeTab === 'google') {
-    csv += ['Business Name', 'Website', 'Description', 'Emails', 'Phone Numbers', 'Social Links']
-      .map(csvEscape).join(',') + '\n';
-    state.results.forEach(r => {
-      csv += [
-        r.name ?? '',
-        r.website ?? '',
-        r.description ?? '',
-        r.emails?.join(' | ') ?? '',
-        r.phones?.join(' | ') ?? '',
-        r.socials?.map(s => s.url).join(' | ') ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
 
