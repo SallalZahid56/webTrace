@@ -76,8 +76,9 @@ function updateMapsMeta() {
   errEl.classList.toggle('show', !isValid);
 
   const num = parseInt(document.getElementById('maps-max-results').value, 10);
+  const numLabel = num >= 9999 ? 'all available' : `up to ${num}`;
   hint.textContent = isValid
-    ? `Will scrape up to ${num} businesses from this Maps page`
+    ? `Will scrape ${numLabel} businesses from this Maps page`
     : 'URL must contain google.com/maps';
 }
 
