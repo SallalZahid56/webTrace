@@ -256,7 +256,9 @@ async function startMapsFlow(mapsUrl) {
   }
 
   state.isRunning = true;
+  state.stopRequested = false;
   state.results = [];
+  setRunningUI(true);
 
   // Switch UI to scan mode
   document.getElementById('input-section').style.display = 'none';
@@ -274,10 +276,13 @@ async function startMapsFlow(mapsUrl) {
 
   // ── Phase A: scrape Maps listings via Playwright ──
   let listings = [];
+  const controller = new AbortController();
+  state.activeController = controller;
   try {
     const res = await fetch(`${API_BASE}/maps-scrape`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({ url: mapsUrl, max_results: maxResults }),
     });
     const data = await res.json();
@@ -289,9 +294,17 @@ async function startMapsFlow(mapsUrl) {
     }
     listings = data.results || [];
   } catch (err) {
+    if (state.stopRequested) {
+      handleStop(0);
+      return;
+    }
     showToast('Failed to reach maps-scrape endpoint.', 'error');
     resetToInput();
     return;
+  } finally {
+    if (state.activeController === controller) {
+      state.activeController = null;
+    }
   }
 
   if (!listings.length) {
