@@ -8,6 +8,8 @@ const state = {
   csvHeaders: [],
   results: [],
   isRunning: false,
+  stopRequested: false,
+  activeController: null,
 };
 
 function switchTab(tab) {
@@ -156,28 +158,37 @@ function collectUrls() {
 async function scrapeUrl(url) {
   const checkContactPage = document.getElementById('opt-contact')?.checked ?? true;
   const deduplicateEmails = document.getElementById('opt-dedup')?.checked ?? true;
+  const controller = new AbortController();
+  state.activeController = controller;
 
-  const response = await fetch(`${API_BASE}/scrape`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url,
-      check_contact_page: checkContactPage,
-      deduplicate_emails: deduplicateEmails,
-    }),
-  });
+  try {
+    const response = await fetch(`${API_BASE}/scrape`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        url,
+        check_contact_page: checkContactPage,
+        deduplicate_emails: deduplicateEmails,
+      }),
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail || `Server error ${response.status}`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // If the backend returned an error field, treat it as a thrown error
+    if (data.error) throw new Error(data.error);
+
+    return data;
+  } finally {
+    if (state.activeController === controller) {
+      state.activeController = null;
+    }
   }
-
-  const data = await response.json();
-
-  // If the backend returned an error field, treat it as a thrown error
-  if (data.error) throw new Error(data.error);
-
-  return data;
 }
 
 // ── Activity feed helpers ──────────────────────────────────────────
@@ -414,6 +425,29 @@ function buildMapsRowHTML(idx, biz, scrapeData, status) {
 <td>${biz.linkedin ? `<a href="${biz.linkedin}"  target="_blank" class="social-a">LinkedIn</a>` : `<span class="muted">—</span>`}</td>`;
 }
 
+function setRunningUI(isRunning) {
+  const runBtn = document.getElementById('run-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  if (!runBtn || !stopBtn) return;
+  runBtn.style.display = isRunning ? 'none' : 'flex';
+  stopBtn.style.display = isRunning ? 'flex' : 'none';
+  stopBtn.disabled = !isRunning;
+}
+
+function stopCurrentRun() {
+  if (!state.isRunning) return;
+
+  state.stopRequested = true;
+  if (state.activeController) {
+    state.activeController.abort();
+  }
+
+  document.getElementById('prog-label').textContent = 'Stopping…';
+  document.getElementById('header-status-text').textContent = 'Stopping…';
+  document.getElementById('stop-btn').disabled = true;
+  showToast('Stopping scan — current results remain visible for download.', 'info');
+}
+
 // ── Main scraping loop ─────────────────────────────────────────────
 async function startScraping() {
   if (state.isRunning) return;
@@ -441,7 +475,9 @@ async function startScraping() {
   }
 
   state.isRunning = true;
+  state.stopRequested = false;
   state.results = [];
+  setRunningUI(true);
 
   document.getElementById('input-section').style.display = 'none';
   document.getElementById('activity-feed').classList.add('show');
@@ -462,6 +498,8 @@ async function startScraping() {
   });
 
   for (let i = 0; i < urls.length; i++) {
+    if (state.stopRequested) break;
+
     const url = urls[i];
 
     document.getElementById(`feed-${i + 1}`).outerHTML = buildFeedItem(i + 1, url, 'pending', null);
@@ -474,11 +512,13 @@ async function startScraping() {
 
     try {
       const data = await scrapeUrl(url);
+      if (state.stopRequested) break;
       state.results.push({ url, ...data });
       updateTableRow(i + 1, url, data, 'done');
       const el = document.getElementById(`feed-${i + 1}`);
       if (el) el.outerHTML = buildFeedItem(i + 1, url, 'done', data);
     } catch (err) {
+      if (state.stopRequested) break;
       state.results.push({ url, emails: [], phones: [], socials: [], error: err.message });
       updateTableRow(i + 1, url, null, 'error');
       const el = document.getElementById(`feed-${i + 1}`);
@@ -492,12 +532,19 @@ async function startScraping() {
     document.getElementById('header-status-text').textContent = `${i + 1} / ${urls.length} scanned`;
   }
 
+  if (state.stopRequested) {
+    handleStop(urls.length);
+    return;
+  }
+
   finishScan(urls.length);
 }
 
 // ── Shared finish helper ───────────────────────────────────────────
 function finishScan(total) {
   state.isRunning = false;
+  state.stopRequested = false;
+  setRunningUI(false);
   document.getElementById('prog-label').textContent = 'Scan complete';
   document.getElementById('run-btn').disabled = false;
   document.getElementById('run-btn').innerHTML = `
@@ -508,9 +555,31 @@ function finishScan(total) {
   showToast(`Done — ${total} site${total !== 1 ? 's' : ''} scraped`, 'success');
 }
 
+function handleStop(total) {
+  state.isRunning = false;
+  state.stopRequested = false;
+  setRunningUI(false);
+  document.getElementById('prog-label').textContent = 'Scan stopped';
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('run-btn').innerHTML = `
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    New scan`;
+  document.getElementById('run-btn').onclick = resetToInput;
+  document.getElementById('dl-btn').disabled = false;
+
+  if (state.results.length) {
+    showToast(`Stopped — ${state.results.length} collected result${state.results.length !== 1 ? 's' : ''} remain visible. Click Download CSV to export them.`, 'info');
+  } else {
+    showToast('Stopped — no results were collected', 'info');
+  }
+}
+
 function resetToInput() {
   state.results = [];
   state.isRunning = false;
+  state.stopRequested = false;
+  state.activeController = null;
+  setRunningUI(false);
   document.getElementById('input-section').style.display = 'block';
   document.getElementById('activity-feed').classList.remove('show');
   document.getElementById('progress-strip').classList.remove('show');
