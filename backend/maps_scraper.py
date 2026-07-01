@@ -75,7 +75,10 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
                 return {"results": [], "error": "Maps results panel did not load"}
 
             time.sleep(2)
-            results = _scroll_and_extract(page, max_results)
+            try:
+                _scroll_and_extract(page, max_results, results)
+            except Exception as e:
+                error = f"Scraping interrupted after {len(results)} results: {str(e)}"
             browser.close()
 
     except Exception as e:
@@ -86,9 +89,8 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
 
 # ── Scroll + extract ──────────────────────────────────────────────
 
-def _scroll_and_extract(page, max_results: int) -> list:
+def _scroll_and_extract(page, max_results: int, results: list) -> list:
     seen_names   = set()
-    results      = []
     scrolls      = 0
     no_new_count = 0
 

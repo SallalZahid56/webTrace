@@ -324,6 +324,7 @@ async function startMapsFlow(mapsUrl) {
 
   // ── Phase B: scrape each business website for emails + socials ──
   for (let i = 0; i < listings.length; i++) {
+    if (state.stopRequested) break;
     const biz = listings[i];
     const url = biz.website || '';
     const label = url || biz.name || `Business ${i + 1}`;
@@ -377,6 +378,11 @@ async function startMapsFlow(mapsUrl) {
     ).length;
     document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
     document.getElementById('header-status-text').textContent = `${i + 1} / ${listings.length} scraped`;
+  }
+
+  if (state.stopRequested) {
+    handleStop(listings.length);
+    return;
   }
 
   finishScan(listings.length);
