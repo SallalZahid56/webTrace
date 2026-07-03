@@ -45,7 +45,7 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=False,
+                headless=True,
                 args=["--no-sandbox", "--disable-setuid-sandbox",
                       "--disable-blink-features=AutomationControlled"],
             )
