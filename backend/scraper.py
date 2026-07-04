@@ -92,24 +92,31 @@ async def scrape_url(
                     continue
 
             if not all_html.strip():
-                return build_response(url, [], [], [], error="No content returned")
+                return build_response(url, [], [], [], {}, error="No content returned")
 
-            # Parse and extract
             soup = BeautifulSoup(all_html, "lxml")
             page_text = soup.get_text(separator=" ")
 
-            emails  = extract_emails(page_text, deduplicate_emails)
-            phones  = extract_phones(page_text)
-            socials = extract_socials(all_html)
+            text_emails = extract_emails(page_text, deduplicate_emails)
+            text_phones = extract_phones(page_text)
+            link_data   = extract_contact_links(soup)   # NEW: catches icon-only links
+
+            # merge, dedupe, keep order
+            emails = list(dict.fromkeys(text_emails + link_data["emails"]))
+            if not deduplicate_emails:
+                emails = text_emails + link_data["emails"]
+            phones   = list(dict.fromkeys(text_phones + link_data["phones"]))
+            whatsapp = list(dict.fromkeys(link_data["whatsapp"]))
+            socials  = extract_socials(all_html)
 
     except httpx.TimeoutException:
-        return build_response(url, [], [], [], error="Request timed out")
+        return build_response(url, [], [], [], {}, error="Request timed out")
     except httpx.RequestError as e:
-        return build_response(url, [], [], [], error=f"Connection error: {str(e)}")
+        return build_response(url, [], [], [], {}, error=f"Connection error: {str(e)}")
     except Exception as e:
-        return build_response(url, [], [], [], error=f"Unexpected error: {str(e)}")
+        return build_response(url, [], [], [], {}, error=f"Unexpected error: {str(e)}")
 
-    return build_response(url, emails, phones, socials)
+    return build_response(url, emails, phones, whatsapp, socials)
 
 
 # ── Extractors ────────────────────────────────────────────────────
@@ -155,26 +162,54 @@ def extract_phones(text: str) -> list[str]:
     return phones
 
 
-def extract_socials(html: str) -> list[dict]:
-    found = []
-    seen_platforms = set()
+# ── NEW: pull contact info out of anchor hrefs (mailto:, tel:, wa.me) ──
+# Regex-on-text misses numbers/emails that only exist inside icon links,
+# e.g. <a href="mailto:info@site.com"><i class="icon-mail"></i></a>
+def extract_contact_links(soup: BeautifulSoup) -> dict:
+    emails = []
+    phones = []
+    whatsapp = []
 
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        href_lower = href.lower()
+
+        if href_lower.startswith("mailto:"):
+            email = href.split(":", 1)[1].split("?")[0].strip().lower()
+            if email:
+                emails.append(email)
+
+        elif href_lower.startswith("tel:"):
+            phone = href.split(":", 1)[1].strip()
+            if phone:
+                phones.append(phone)
+
+        elif "wa.me/" in href_lower or "api.whatsapp.com" in href_lower or "whatsapp.com/send" in href_lower:
+            digits = re.sub(r"\D", "", href.split("?")[0])
+            if not digits:
+                m = re.search(r"phone=(\d+)", href)
+                if m:
+                    digits = m.group(1)
+            if digits:
+                whatsapp.append(digits)
+
+    return {"emails": emails, "phones": phones, "whatsapp": whatsapp}
+
+
+# ── Social Extractor ────────────────────────────────────────────────────
+
+def extract_socials(html: str) -> dict:
+    result = {platform: "" for platform in SOCIAL_PATTERNS}
     for platform, pattern in SOCIAL_PATTERNS.items():
         matches = re.findall(pattern, html, re.IGNORECASE)
         if matches:
-            # Take the first clean match per platform
             raw = matches[0] if isinstance(matches[0], str) else matches[0][0]
-            # Build full URL from the matched path
-            if platform in ("twitter",):
+            if platform == "twitter":
                 full_url = f"https://twitter.com/{raw.split('/')[-1]}"
             else:
                 full_url = f"https://www.{platform}.com/{raw.split(f'{platform}.com/')[-1]}"
-
-            if platform not in seen_platforms:
-                seen_platforms.add(platform)
-                found.append({"platform": platform, "url": full_url})
-
-    return found
+            result[platform] = full_url
+    return result
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -188,13 +223,21 @@ def build_response(
     url: str,
     emails: list,
     phones: list,
-    socials: list,
+    whatsapp: list,
+    socials: dict,
     error: str | None = None,
 ) -> dict:
     return {
         "url": url,
         "emails": emails,
         "phones": phones,
-        "socials": socials,
+        "whatsapp": whatsapp,
+        "facebook": socials.get("facebook", ""),
+        "instagram": socials.get("instagram", ""),
+        "linkedin": socials.get("linkedin", ""),
+        "twitter": socials.get("twitter", ""),
+        "youtube": socials.get("youtube", ""),
+        "github": socials.get("github", ""),
+        "tiktok": socials.get("tiktok", ""),
         "error": error,
     }
