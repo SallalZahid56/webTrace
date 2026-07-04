@@ -201,9 +201,10 @@ function buildFeedItem(idx, url, status, data) {
     metaHTML = `<div class="feed-meta">Fetching homepage…</div>`;
   } else if (status === 'done') {
     dotHTML = `<div class="feed-dot done"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg></div>`;
-    const total = (data?.emails?.length || 0) + (data?.phones?.length || 0) + (data?.socials?.length || 0);
+    const socialCount = ['facebook', 'instagram', 'linkedin'].filter(k => data?.[k]).length;
+    const total = (data?.emails?.length || 0) + (data?.phones?.length || 0) + (data?.whatsapp?.length || 0) + socialCount;
     if (total > 0) {
-      metaHTML = `<div class="feed-meta">${data.emails.length} email${data.emails.length !== 1 ? 's' : ''} · ${data.phones.length} phone${data.phones.length !== 1 ? 's' : ''} · ${data.socials.length} social</div>`;
+      metaHTML = `<div class="feed-meta">${data.emails.length} email${data.emails.length !== 1 ? 's' : ''} · ${data.phones.length} phone${data.phones.length !== 1 ? 's' : ''}${data.whatsapp?.length ? ` · ${data.whatsapp.length} whatsapp` : ''} · ${socialCount} social</div>`;
       foundHTML = `<span class="feed-found ok">✓ Contact data found</span>`;
     } else {
       metaHTML = `<div class="feed-meta">Scanned — no contact data found</div>`;
@@ -342,14 +343,14 @@ async function startMapsFlow(mapsUrl) {
     if (url) {
       try {
         const scrapeData = await scrapeUrl(url);
-        const extractedSocials = extractSocialsByPlatform(scrapeData.socials);
         const merged = {
           ...biz,
           emails: scrapeData.emails,
           phones: scrapeData.phones,
-          facebook: biz.facebook || extractedSocials.facebook,
-          instagram: biz.instagram || extractedSocials.instagram,
-          linkedin: biz.linkedin || extractedSocials.linkedin,
+          whatsapp: scrapeData.whatsapp,
+          facebook: biz.facebook || scrapeData.facebook,
+          instagram: biz.instagram || scrapeData.instagram,
+          linkedin: biz.linkedin || scrapeData.linkedin,
         };
         state.results.push(merged);
         updateMapsTableRow(i + 1, merged, 'done');
@@ -633,7 +634,7 @@ function buildTableHead(mode) {
   if (mode === 'maps') {
     cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Facebook', 'Instagram', 'LinkedIn'];
   } else {
-    cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'Socials'];
+    cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   }
 
   head.innerHTML = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
@@ -656,14 +657,16 @@ function updateTableRow(idx, url, data, status) {
 function buildRowHTML(idx, url, data, status) {
   const host = hostname(url);
   let badge = '';
+  const hasData = data && (data.emails.length || data.phones.length || data.whatsapp?.length ||
+    data.facebook || data.instagram || data.linkedin);
   if (status === 'scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
   else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
-  else if (data && (data.emails.length || data.phones.length || data.socials.length)) badge = `<span class="badge badge-found">found</span>`;
+  else if (hasData) badge = `<span class="badge badge-found">found</span>`;
   else badge = `<span class="badge badge-empty">empty</span>`;
 
   const emails = data?.emails ?? [];
   const phones = data?.phones ?? [];
-  const socials = data?.socials ?? [];
+  const whatsapp = data?.whatsapp ?? [];
 
   return `
     <td class="idx-cell">${idx}</td>
@@ -671,7 +674,10 @@ function buildRowHTML(idx, url, data, status) {
     <td>${badge}</td>
     <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
     <td>${phones.length ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${socials.length ? socials.map(s => `<a href="${s.url}" target="_blank" class="social-a">${s.platform}</a>`).join('') : `<span class="muted">—</span>`}</td>`;
+    <td>${whatsapp.length ? whatsapp.map(w => `<span class="data-mono">${w}</span>`).join('') : `<span class="muted">—</span>`}</td>
+    <td>${data?.facebook ? `<a href="${data.facebook}" target="_blank" class="social-a">Facebook</a>` : `<span class="muted">—</span>`}</td>
+    <td>${data?.instagram ? `<a href="${data.instagram}" target="_blank" class="social-a">Instagram</a>` : `<span class="muted">—</span>`}</td>
+    <td>${data?.linkedin ? `<a href="${data.linkedin}" target="_blank" class="social-a">LinkedIn</a>` : `<span class="muted">—</span>`}</td>`;
 }
 
 function downloadCSV() {
@@ -701,7 +707,7 @@ function downloadCSV() {
 
   } else if (state.activeTab === 'csv' && state.csvData) {
     const colIdx = parseInt(document.getElementById('url-column').value, 10);
-    csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'Social Links']
+    csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn']
       .map(csvEscape).join(',') + '\n';
     state.csvData.forEach(row => {
       const url = (row[colIdx] || '').trim();
@@ -710,18 +716,24 @@ function downloadCSV() {
         ...row,
         result?.emails?.join(' | ') ?? '',
         result?.phones?.join(' | ') ?? '',
-        result?.socials?.map(s => s.url).join(' | ') ?? '',
+        result?.whatsapp?.join(' | ') ?? '',
+        result?.facebook ?? '',
+        result?.instagram ?? '',
+        result?.linkedin ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
 
   } else {
-    csv += ['URL', 'Emails', 'Phone Numbers', 'Social Links'].map(csvEscape).join(',') + '\n';
+    csv += ['URL', 'Emails', 'Phone Numbers', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'].map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
       csv += [
         r.url,
         r.emails?.join(' | ') ?? '',
         r.phones?.join(' | ') ?? '',
-        r.socials?.map(s => s.url).join(' | ') ?? '',
+        r.whatsapp?.join(' | ') ?? '',
+        r.facebook ?? '',
+        r.instagram ?? '',
+        r.linkedin ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
   }

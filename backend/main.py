@@ -37,7 +37,14 @@ class ScrapeResponse(BaseModel):
     url: str
     emails: List[str]
     phones: List[str]
-    socials: List[SocialLink]
+    whatsapp: List[str] = []
+    facebook: str = ""
+    instagram: str = ""
+    linkedin: str = ""
+    twitter: str = ""
+    youtube: str = ""
+    github: str = ""
+    tiktok: str = ""
     error: Optional[str] = None
 
 # ── Maps models ───────────────────────────────────────────────────
