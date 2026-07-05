@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright
 
 # ── Constants ─────────────────────────────────────────────────────
 PAGE_TIMEOUT = 30_000
-SCROLL_PAUSE = 2.0
+SCROLL_PAUSE = 2.5
 MAX_SCROLLS  = 30
 
 # ── Strip icon garbage characters from Maps text ──────────────────
@@ -94,13 +94,20 @@ def _scroll_and_extract(page, max_results: int, results: list) -> list:
     scrolls      = 0
     no_new_count = 0
 
-    while scrolls < MAX_SCROLLS and len(results) < max_results:
+    # Scale scroll budget to the request instead of a fixed 30.
+    # "All" (9999) gets a generous cap; Google Maps itself usually
+    # tops out around 100-120 results per search regardless.
+    effective_cap = min(max_results, 150) if max_results < 9999 else 150
+    max_scrolls = max(30, effective_cap * 4)
+
+    while scrolls < max_scrolls and len(results) < max_results:
         count_before = len(results)
 
-        # Collect all card hrefs currently visible
-        cards = page.query_selector_all('div[role="feed"] a[href*="/maps/place/"]')
+        # Remember where we are in the feed before clicking into any detail page
+        feed = page.query_selector('div[role="feed"]')
+        scroll_pos_before = feed.evaluate("el => el.scrollTop") if feed else 0
 
-        # Build a list of (name, href) first — don't click yet
+        cards = page.query_selector_all('div[role="feed"] a[href*="/maps/place/"]')
         candidates = []
         for card in cards:
             name = (card.get_attribute("aria-label") or "").strip()
@@ -108,7 +115,6 @@ def _scroll_and_extract(page, max_results: int, results: list) -> list:
             if name and name not in seen_names and href:
                 candidates.append((name, href))
 
-        # Now click into each new candidate one by one
         for name, href in candidates:
             if len(results) >= max_results:
                 break
@@ -120,18 +126,26 @@ def _scroll_and_extract(page, max_results: int, results: list) -> list:
                 seen_names.add(name)
                 results.append(listing)
 
-        # End of list check
-        end_el = page.query_selector("span.HlvSq")
-        if end_el:
-            break
-
-        # Scroll the feed
-        try:
+            # Restore scroll position after go_back() resets it
             feed = page.query_selector('div[role="feed"]')
+            if feed and scroll_pos_before:
+                feed.evaluate(f"el => el.scrollTop = {scroll_pos_before}")
+                time.sleep(0.3)
+
+        # More reliable end-of-list check: look at the feed's own text
+        # instead of a minified class name that can change between deploys
+        try:
+            feed_text = feed.inner_text() if feed else ""
+            if "you've reached the end of the list" in feed_text.lower():
+                break
+        except Exception:
+            pass
+
+        try:
             if feed:
-                feed.evaluate("el => el.scrollBy(0, 1000)")
+                feed.evaluate("el => el.scrollBy(0, 1200)")
             else:
-                page.evaluate("window.scrollBy(0, 1000)")
+                page.evaluate("window.scrollBy(0, 1200)")
         except Exception:
             pass
 
@@ -140,7 +154,9 @@ def _scroll_and_extract(page, max_results: int, results: list) -> list:
 
         if len(results) == count_before:
             no_new_count += 1
-            if no_new_count >= 3:
+            # Give it more room before giving up — Maps can lag on loading
+            # more results, especially after several detail-page round trips
+            if no_new_count >= 6:
                 break
         else:
             no_new_count = 0
