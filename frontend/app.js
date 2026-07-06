@@ -83,7 +83,7 @@ function updateMapsMeta() {
     ? `Will scrape ${numLabel} businesses from this Maps page`
     : 'URL must contain google.com/maps';
 }
-
+ 
 function setMapsMaxResults(btn) {
   document.querySelectorAll('#panel-maps .num-chip').forEach(c => c.classList.remove('active'));
   btn.classList.add('active');
@@ -98,7 +98,7 @@ function toggleTile(label) {
     label.classList.toggle('selected', cb.checked);
   }, 0);
 }
-
+ 
 // ── CSV ────────────────────────────────────────────────────────────
 function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('over'); }
 function handleDragLeave() { document.getElementById('drop-zone').classList.remove('over'); }
@@ -190,7 +190,7 @@ async function scrapeUrl(url) {
     }
   }
 }
-
+ 
 // ── Activity feed helpers ──────────────────────────────────────────
 function buildFeedItem(idx, url, status, data) {
   const host = hostname(url);

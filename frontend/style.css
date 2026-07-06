@@ -13,9 +13,9 @@
 }
 html,body{height:100%;font-family:'Inter',system-ui,sans-serif;font-size:14px;color:var(--slate-700);-webkit-font-smoothing:antialiased;background:var(--white)}
 body{display:flex;flex-direction:column;overflow:hidden}
-
+   
 /* ── Header ── */
-header{
+header{     
   height:54px;border-bottom:1px solid var(--slate-200);
   display:flex;align-items:center;padding:0 24px;gap:10px;
   flex-shrink:0;background:var(--white);z-index:30;
