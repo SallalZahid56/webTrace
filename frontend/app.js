@@ -83,7 +83,7 @@ function updateMapsMeta() {
     ? `Will scrape ${numLabel} businesses from this Maps page`
     : 'URL must contain google.com/maps';
 }
- 
+
 function setMapsMaxResults(btn) {
   document.querySelectorAll('#panel-maps .num-chip').forEach(c => c.classList.remove('active'));
   btn.classList.add('active');
@@ -98,7 +98,7 @@ function toggleTile(label) {
     label.classList.toggle('selected', cb.checked);
   }, 0);
 }
- 
+
 // ── CSV ────────────────────────────────────────────────────────────
 function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('over'); }
 function handleDragLeave() { document.getElementById('drop-zone').classList.remove('over'); }
@@ -190,7 +190,7 @@ async function scrapeUrl(url) {
     }
   }
 }
- 
+
 // ── Activity feed helpers ──────────────────────────────────────────
 function buildFeedItem(idx, url, status, data) {
   const host = hostname(url);
@@ -322,7 +322,7 @@ async function startMapsFlow(mapsUrl) {
         document.getElementById('header-status-text').textContent = `${listingCount} found so far`;
 
         document.getElementById('feed-list').insertAdjacentHTML('beforeend', buildFeedItem(listingCount, label, 'pending', null));
-        addMapsTableRow(listingCount, biz, null, 'scanning');
+        addMapsTableRow(listingCount, biz, 'scanning');
 
         if (maxResults < 9999) updateProgress(listingCount, maxResults);
 
@@ -334,26 +334,46 @@ async function startMapsFlow(mapsUrl) {
             const scrapeData = await scrapeUrl(biz.website);
             const merged = {
               ...biz,
+              maps_phone: biz.phone || '',
+              website_phone: scrapeData.phones?.join(' | ') || '',
               emails: scrapeData.emails,
               phones: scrapeData.phones,
               whatsapp: scrapeData.whatsapp,
-              facebook: biz.facebook || scrapeData.facebook,
-              instagram: biz.instagram || scrapeData.instagram,
-              linkedin: biz.linkedin || scrapeData.linkedin,
+              maps_facebook: biz.facebook || '',
+              website_facebook: scrapeData.facebook || '',
+              maps_instagram: biz.instagram || '',
+              website_instagram: scrapeData.instagram || '',
+              maps_linkedin: biz.linkedin || '',
+              website_linkedin: scrapeData.linkedin || '',
             };
             state.results.push(merged);
             updateMapsTableRow(listingCount, merged, 'done');
             const el = document.getElementById(`feed-${listingCount}`);
             if (el) el.outerHTML = buildFeedItem(listingCount, label, 'done', scrapeData);
           } catch (err) {
-            const merged = { ...biz, emails: [], phones: [], whatsapp: [], error: err.message };
+            const merged = {
+              ...biz,
+              maps_phone: biz.phone || '', website_phone: '',
+              emails: [], phones: [], whatsapp: [],
+              maps_facebook: biz.facebook || '', website_facebook: '',
+              maps_instagram: biz.instagram || '', website_instagram: '',
+              maps_linkedin: biz.linkedin || '', website_linkedin: '',
+              error: err.message,
+            };
             state.results.push(merged);
             updateMapsTableRow(listingCount, merged, 'error');
             const el = document.getElementById(`feed-${listingCount}`);
             if (el) el.outerHTML = buildFeedItem(listingCount, label, 'error', null);
           }
         } else {
-          const merged = { ...biz, emails: [], phones: [] };
+          const merged = {
+            ...biz,
+            maps_phone: biz.phone || '', website_phone: '',
+            emails: [], phones: [], whatsapp: [],
+            maps_facebook: biz.facebook || '', website_facebook: '',
+            maps_instagram: biz.instagram || '', website_instagram: '',
+            maps_linkedin: biz.linkedin || '', website_linkedin: '',
+          };
           state.results.push(merged);
           updateMapsTableRow(listingCount, merged, 'done');
           const el = document.getElementById(`feed-${listingCount}`);
@@ -399,59 +419,68 @@ async function startMapsFlow(mapsUrl) {
 }
 
 // ── Maps table rows ────────────────────────────────────────────────
-function addMapsTableRow(idx, biz, scrapeData, status) {
+function addMapsTableRow(idx, biz, status) {
   const tr = document.createElement('tr');
   tr.id = `row-${idx}`; tr.className = 'row-appear';
-  tr.innerHTML = buildMapsRowHTML(idx, biz, scrapeData, status);
+  tr.innerHTML = buildMapsRowHTML(idx, biz, status);
   document.getElementById('results-body').appendChild(tr);
   tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function updateMapsTableRow(idx, biz, status) {
   const tr = document.getElementById(`row-${idx}`);
-  if (tr) tr.innerHTML = buildMapsRowHTML(idx, biz, biz, status);
+  if (tr) tr.innerHTML = buildMapsRowHTML(idx, biz, status);
 }
 
-function buildMapsRowHTML(idx, biz, scrapeData, status) {
+function buildMapsRowHTML(idx, biz, status) {
   const url = biz.website || '';
   const name = biz.name || '—';
   const address = biz.address || '—';
-  const phone = biz.phone || '';
   const rating = biz.rating ? `⭐ ${biz.rating}` : '—';
   const reviews = biz.reviews ? `(${biz.reviews})` : '';
 
-  const emails = scrapeData?.emails ?? [];
-  const socials = scrapeData?.socials ?? [];
+  const emails = biz.emails ?? [];
+  const whatsapp = biz.whatsapp ?? [];
+  const mapsPhone = biz.maps_phone || '';
+  const websitePhone = biz.website_phone || '';
 
-  // Phone: prefer Maps phone, fallback to scraped phones
-  const phones = phone
-    ? [phone]
-    : (scrapeData?.phones ?? []);
+  const hasData = emails.length || whatsapp.length || mapsPhone || websitePhone ||
+    biz.maps_facebook || biz.website_facebook ||
+    biz.maps_instagram || biz.website_instagram ||
+    biz.maps_linkedin || biz.website_linkedin;
 
   let badge = '';
   if (status === 'scanning') badge = `<span class="badge badge-scanning">scanning</span>`;
   else if (status === 'error') badge = `<span class="badge badge-error">error</span>`;
-  else if (emails.length || phones.length || socials.length || biz.facebook || biz.instagram || biz.linkedin) badge = `<span class="badge badge-found">found</span>`;
+  else if (hasData) badge = `<span class="badge badge-found">found</span>`;
   else badge = `<span class="badge badge-empty">empty</span>`;
 
   const websiteCell = url
     ? `<a href="${url}" target="_blank" class="site-name">${hostname(url)}</a><div class="site-url-sub">${url}</div>`
     : `<span class="muted">No website</span>`;
 
+  const socialCell = (mapsVal, siteVal, label) => {
+    if (!mapsVal && !siteVal) return `<span class="muted">—</span>`;
+    const parts = [];
+    if (mapsVal) parts.push(`<a href="${mapsVal}" target="_blank" class="social-a">${label} (Maps)</a>`);
+    if (siteVal) parts.push(`<a href="${siteVal}" target="_blank" class="social-a">${label} (Site)</a>`);
+    return parts.join('<br>');
+  };
+
   return `
     <td class="idx-cell">${idx}</td>
-    <td>
-      <div style="font-size:12px;font-weight:500;color:var(--slate-800)">${name}</div>
-    </td>
+    <td><div style="font-size:12px;font-weight:500;color:var(--slate-800)">${name}</div></td>
     <td><span style="font-size:11px;color:var(--slate-500)">${address}</span></td>
     <td><span style="font-size:11px;color:var(--slate-600)">${rating} ${reviews}</span></td>
     <td>${websiteCell}</td>
     <td>${badge}</td>
-    <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${phones.length ? phones.map(p => `<span class="data-mono">${p}</span>`).join('') : `<span class="muted">—</span>`}</td>
-    <td>${biz.facebook ? `<a href="${biz.facebook}"  target="_blank" class="social-a">Facebook</a>` : `<span class="muted">—</span>`}</td>
-<td>${biz.instagram ? `<a href="${biz.instagram}" target="_blank" class="social-a">Instagram</a>` : `<span class="muted">—</span>`}</td>
-<td>${biz.linkedin ? `<a href="${biz.linkedin}"  target="_blank" class="social-a">LinkedIn</a>` : `<span class="muted">—</span>`}</td>`;
+    <td>${mapsPhone ? `<span class="data-mono">${mapsPhone}</span>` : `<span class="muted">—</span>`}</td>
+    <td>${websitePhone ? `<span class="data-mono">${websitePhone}</span>` : `<span class="muted">—</span>`}</td>
+    <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('<br>') : `<span class="muted">—</span>`}</td>
+    <td>${whatsapp.length ? whatsapp.map(w => `<span class="data-mono">${w}</span>`).join('<br>') : `<span class="muted">—</span>`}</td>
+    <td>${socialCell(biz.maps_facebook, biz.website_facebook, 'Facebook')}</td>
+    <td>${socialCell(biz.maps_instagram, biz.website_instagram, 'Instagram')}</td>
+    <td>${socialCell(biz.maps_linkedin, biz.website_linkedin, 'LinkedIn')}</td>`;
 }
 
 function setRunningUI(isRunning) {
@@ -641,7 +670,7 @@ function buildTableHead(mode) {
   let cols = [];
 
   if (mode === 'maps') {
-    cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Emails', 'Phones', 'Facebook', 'Instagram', 'LinkedIn'];
+    cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Maps Phone', 'Website Phone', 'Emails', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   }
@@ -695,22 +724,30 @@ function downloadCSV() {
   let csv = '';
 
   if (state.activeTab === 'maps') {
-    // Maps mode — full business profile + scraped contacts
-    csv += ['Business Name', 'Address', 'Phone', 'Rating', 'Reviews',
-      'Website', 'Emails', 'Facebook', 'Instagram', 'LinkedIn']
+    // Maps mode — full business profile + scraped contacts, sources kept separate
+    csv += ['Business Name', 'Address', 'Rating', 'Reviews', 'Website',
+      'Maps Phone', 'Website Phone', 'Emails', 'WhatsApp',
+      'Maps Facebook', 'Website Facebook',
+      'Maps Instagram', 'Website Instagram',
+      'Maps LinkedIn', 'Website LinkedIn']
       .map(csvEscape).join(',') + '\n';
     state.results.forEach(r => {
       csv += [
         r.name ?? '',
         r.address ?? '',
-        r.phone ?? '',
         r.rating ?? '',
         r.reviews ?? '',
         r.website ?? '',
+        r.maps_phone ?? '',
+        r.website_phone ?? '',
         r.emails?.join(' | ') ?? '',
-        r.facebook ?? '',
-        r.instagram ?? '',
-        r.linkedin ?? '',
+        r.whatsapp?.join(' | ') ?? '',
+        r.maps_facebook ?? '',
+        r.website_facebook ?? '',
+        r.maps_instagram ?? '',
+        r.website_instagram ?? '',
+        r.maps_linkedin ?? '',
+        r.website_linkedin ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
 
