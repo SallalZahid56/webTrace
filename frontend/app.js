@@ -261,7 +261,6 @@ async function startMapsFlow(mapsUrl) {
   state.results = [];
   setRunningUI(true);
 
-  // Switch UI to scan mode
   document.getElementById('input-section').style.display = 'none';
   document.getElementById('activity-feed').classList.add('show');
   document.getElementById('run-btn').disabled = true;
@@ -275,118 +274,128 @@ async function startMapsFlow(mapsUrl) {
   document.getElementById('results-body').innerHTML = '';
   document.getElementById('feed-list').innerHTML = '';
 
-  // ── Phase A: scrape Maps listings via Playwright ──
-  let listings = [];
+  let listingCount = 0;
+  let mapsError = null;
   const controller = new AbortController();
   state.activeController = controller;
+
   try {
-    const res = await fetch(`${API_BASE}/maps-scrape`, {
+    const res = await fetch(`${API_BASE}/maps-scrape-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({ url: mapsUrl, max_results: maxResults }),
     });
-    const data = await res.json();
 
-    if (data.error && !data.results?.length) {
-      showToast(`Maps error: ${data.error}`, 'error');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      if (state.stopRequested) { reader.cancel(); break; }
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let lineEnd;
+      while ((lineEnd = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, lineEnd).trim();
+        buffer = buffer.slice(lineEnd + 1);
+        if (!line) continue;
+
+        let item;
+        try { item = JSON.parse(line); } catch { continue; }
+
+        if (item.__final__) { mapsError = item.error || null; continue; }
+
+        // ── A real listing just arrived from the Maps feed ──
+        listingCount++;
+        const biz = item;
+        const label = biz.website || biz.name || `Business ${listingCount}`;
+
+        document.getElementById('prog-label').textContent = `Found ${biz.name || 'a business'} — scanning its site…`;
+        document.getElementById('header-status-text').textContent = `${listingCount} found so far`;
+
+        document.getElementById('feed-list').insertAdjacentHTML('beforeend', buildFeedItem(listingCount, label, 'pending', null));
+        addMapsTableRow(listingCount, biz, null, 'scanning');
+
+        if (maxResults < 9999) updateProgress(listingCount, maxResults);
+
+        if (state.stopRequested) break;
+
+        // Immediately scrape that business's website (sequential, same as before)
+        if (biz.website) {
+          try {
+            const scrapeData = await scrapeUrl(biz.website);
+            const merged = {
+              ...biz,
+              emails: scrapeData.emails,
+              phones: scrapeData.phones,
+              whatsapp: scrapeData.whatsapp,
+              facebook: biz.facebook || scrapeData.facebook,
+              instagram: biz.instagram || scrapeData.instagram,
+              linkedin: biz.linkedin || scrapeData.linkedin,
+            };
+            state.results.push(merged);
+            updateMapsTableRow(listingCount, merged, 'done');
+            const el = document.getElementById(`feed-${listingCount}`);
+            if (el) el.outerHTML = buildFeedItem(listingCount, label, 'done', scrapeData);
+          } catch (err) {
+            const merged = { ...biz, emails: [], phones: [], whatsapp: [], error: err.message };
+            state.results.push(merged);
+            updateMapsTableRow(listingCount, merged, 'error');
+            const el = document.getElementById(`feed-${listingCount}`);
+            if (el) el.outerHTML = buildFeedItem(listingCount, label, 'error', null);
+          }
+        } else {
+          const merged = { ...biz, emails: [], phones: [] };
+          state.results.push(merged);
+          updateMapsTableRow(listingCount, merged, 'done');
+          const el = document.getElementById(`feed-${listingCount}`);
+          if (el) el.outerHTML = buildFeedItem(listingCount, label, 'done', { emails: [], phones: [], socials: [] });
+        }
+
+        const done = state.results.length;
+        const withData = state.results.filter(r =>
+          r.emails?.length || r.phones?.length || r.whatsapp?.length || r.facebook || r.instagram || r.linkedin || r.phone
+        ).length;
+        document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
+        document.getElementById('header-status-text').textContent = `${listingCount} scraped`;
+      }
+    }
+  } catch (err) {
+    if (!state.stopRequested) {
+      showToast('Failed to reach maps-scrape endpoint.', 'error');
       resetToInput();
       return;
     }
-    listings = data.results || [];
-  } catch (err) {
-    if (state.stopRequested) {
-      handleStop(0);
-      return;
-    }
-    showToast('Failed to reach maps-scrape endpoint.', 'error');
-    resetToInput();
-    return;
   } finally {
     if (state.activeController === controller) {
       state.activeController = null;
     }
   }
 
-  if (!listings.length) {
-    showToast('No businesses found on that Maps page.', 'error');
+  if (state.stopRequested) {
+    handleStop(listingCount);
+    return;
+  }
+
+  if (listingCount === 0) {
+    showToast(mapsError ? `Maps error: ${mapsError}` : 'No businesses found on that Maps page.', 'error');
     resetToInput();
     return;
   }
 
-  // Pre-populate feed with all listings as idle
-  const feedList = document.getElementById('feed-list');
-  listings.forEach((biz, i) => {
-    const label = biz.website || biz.name || `Business ${i + 1}`;
-    feedList.insertAdjacentHTML('beforeend', buildFeedItem(i + 1, label, 'idle', null));
-  });
-
-  document.getElementById('header-status-text').textContent = `0 / ${listings.length} scraped`;
-
-  // ── Phase B: scrape each business website for emails + socials ──
-  for (let i = 0; i < listings.length; i++) {
-    if (state.stopRequested) break;
-    const biz = listings[i];
-    const url = biz.website || '';
-    const label = url || biz.name || `Business ${i + 1}`;
-
-    const feedEl = document.getElementById(`feed-${i + 1}`);
-    if (feedEl) feedEl.outerHTML = buildFeedItem(i + 1, label, 'pending', null);
-    document.getElementById(`feed-${i + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    document.getElementById('prog-label').textContent = `Scraping ${biz.name || hostname(url)}…`;
-    document.getElementById('header-status-text').textContent = `${i + 1} / ${listings.length} scraping`;
-    updateProgress(i, listings.length);
-    addMapsTableRow(i + 1, biz, null, 'scanning');
-
-    // Only scrape website if one exists
-    if (url) {
-      try {
-        const scrapeData = await scrapeUrl(url);
-        const merged = {
-          ...biz,
-          emails: scrapeData.emails,
-          phones: scrapeData.phones,
-          whatsapp: scrapeData.whatsapp,
-          facebook: biz.facebook || scrapeData.facebook,
-          instagram: biz.instagram || scrapeData.instagram,
-          linkedin: biz.linkedin || scrapeData.linkedin,
-        };
-        state.results.push(merged);
-        updateMapsTableRow(i + 1, merged, 'done');
-        const el = document.getElementById(`feed-${i + 1}`);
-        if (el) el.outerHTML = buildFeedItem(i + 1, label, 'done', scrapeData);
-      } catch (err) {
-        const merged = { ...biz, emails: [], phones: [], socials: [], error: err.message };
-        state.results.push(merged);
-        updateMapsTableRow(i + 1, merged, 'error');
-        const el = document.getElementById(`feed-${i + 1}`);
-        if (el) el.outerHTML = buildFeedItem(i + 1, label, 'error', null);
-      }
-    } else {
-      // No website — still show the Maps data we have
-      const merged = { ...biz, emails: [], phones: [] };
-      state.results.push(merged);
-      updateMapsTableRow(i + 1, merged, 'done');
-      const el = document.getElementById(`feed-${i + 1}`);
-      if (el) el.outerHTML = buildFeedItem(i + 1, label, 'done', { emails: [], phones: [], socials: [] });
-    }
-
-    updateProgress(i + 1, listings.length);
-    const done = state.results.length;
-    const withData = state.results.filter(r =>
-      r.emails?.length || r.phones?.length || r.socials?.length || r.phone
-    ).length;
-    document.getElementById('results-sub').textContent = `${done} scraped · ${withData} with contact data`;
-    document.getElementById('header-status-text').textContent = `${i + 1} / ${listings.length} scraped`;
+  if (mapsError) {
+    showToast(`Finished with a warning: ${mapsError}`, 'info');
   }
 
-  if (state.stopRequested) {
-    handleStop(listings.length);
-    return;
-  }
-
-  finishScan(listings.length);
+  finishScan(listingCount);
 }
 
 // ── Maps table rows ────────────────────────────────────────────────

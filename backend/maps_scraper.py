@@ -4,6 +4,7 @@ import threading
 import asyncio
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
+import queue as queue_module
 
 # ── Constants ─────────────────────────────────────────────────────
 PAGE_TIMEOUT = 30_000
@@ -36,9 +37,44 @@ async def scrape_maps(url: str, max_results: int = 20) -> dict:
     return result_container.get('data', {"results": [], "error": "Thread failed"})
 
 
+
+
+# ── Streaming entry point — yields each listing as it's scraped ──────
+async def scrape_maps_stream(url: str, max_results: int = 20):
+    """
+    Async generator version of scrape_maps. Runs Playwright in a background
+    thread as before, but yields each business listing to the caller the
+    moment it's extracted, instead of waiting for the whole batch to finish.
+    Final item is always {"__final__": True, "error": <str|None>}.
+    """
+    q: queue_module.Queue = queue_module.Queue()
+    result_container = {}
+
+    def run_in_thread():
+        try:
+            data = _scrape_maps_sync(url, max_results, q)
+            result_container['error'] = data.get('error')
+        except Exception as e:
+            result_container['error'] = str(e)
+        finally:
+            q.put({"__done__": True})
+
+    thread = threading.Thread(target=run_in_thread)
+    thread.start()
+
+    loop = asyncio.get_event_loop()
+    while True:
+        item = await loop.run_in_executor(None, q.get)  # blocking get, off the event loop
+        if isinstance(item, dict) and item.get("__done__"):
+            break
+        yield item
+
+    yield {"__final__": True, "error": result_container.get('error')}
+
+
 # ── Sync Playwright scrape ────────────────────────────────────────
 
-def _scrape_maps_sync(url: str, max_results: int) -> dict:
+def _scrape_maps_sync(url: str, max_results: int, q=None) -> dict:
     results = []
     error   = None
 
@@ -76,7 +112,7 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
 
             time.sleep(2)
             try:
-                _scroll_and_extract(page, max_results, results)
+                _scroll_and_extract(page, max_results, results, q)
             except Exception as e:
                 error = f"Scraping interrupted after {len(results)} results: {str(e)}"
             browser.close()
@@ -89,21 +125,17 @@ def _scrape_maps_sync(url: str, max_results: int) -> dict:
 
 # ── Scroll + extract ──────────────────────────────────────────────
 
-def _scroll_and_extract(page, max_results: int, results: list) -> list:
+def _scroll_and_extract(page, max_results: int, results: list, q=None) -> list:
     seen_names   = set()
     scrolls      = 0
     no_new_count = 0
 
-    # Scale scroll budget to the request instead of a fixed 30.
-    # "All" (9999) gets a generous cap; Google Maps itself usually
-    # tops out around 100-120 results per search regardless.
     effective_cap = min(max_results, 150) if max_results < 9999 else 150
     max_scrolls = max(30, effective_cap * 4)
 
     while scrolls < max_scrolls and len(results) < max_results:
         count_before = len(results)
 
-        # Remember where we are in the feed before clicking into any detail page
         feed = page.query_selector('div[role="feed"]')
         scroll_pos_before = feed.evaluate("el => el.scrollTop") if feed else 0
 
@@ -125,8 +157,9 @@ def _scroll_and_extract(page, max_results: int, results: list) -> list:
             if listing:
                 seen_names.add(name)
                 results.append(listing)
+                if q is not None:
+                    q.put(listing)   # NEW — push it out immediately
 
-            # Restore scroll position after go_back() resets it
             feed = page.query_selector('div[role="feed"]')
             if feed and scroll_pos_before:
                 feed.evaluate(f"el => el.scrollTop = {scroll_pos_before}")

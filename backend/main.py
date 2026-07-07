@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import json
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -10,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from scraper import scrape_url
-from maps_scraper import scrape_maps, is_valid_maps_url
+from fastapi.responses import StreamingResponse
+from maps_scraper import scrape_maps, scrape_maps_stream, is_valid_maps_url
 
 app = FastAPI(title="WebTrace API", version="2.0.0")
 
@@ -83,6 +85,22 @@ async def scrape(req: ScrapeRequest):
         deduplicate_emails=req.deduplicate_emails,
     )
     return result
+
+
+
+@app.post("/maps-scrape-stream")
+async def maps_scrape_stream(req: MapsRequest):
+    if not is_valid_maps_url(req.url):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid Google Maps URL. Make sure it contains 'google.com/maps'.",
+        )
+
+    async def event_generator():
+        async for item in scrape_maps_stream(req.url, req.max_results):
+            yield json.dumps(item) + "\n"
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 # ── Maps scrape endpoint ───────────────────────────────────────────
 
