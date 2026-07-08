@@ -8,7 +8,7 @@ import queue as queue_module
 
 # ── Constants ─────────────────────────────────────────────────────
 PAGE_TIMEOUT = 30_000
-SCROLL_PAUSE = 2.5
+SCROLL_PAUSE = 3.0
 MAX_SCROLLS  = 30
 
 # ── Strip icon garbage characters from Maps text ──────────────────
@@ -130,8 +130,10 @@ def _scroll_and_extract(page, max_results: int, results: list, q=None) -> list:
     scrolls      = 0
     no_new_count = 0
 
-    effective_cap = min(max_results, 150) if max_results < 9999 else 150
-    max_scrolls = max(30, effective_cap * 4)
+    # Raise the ceiling meaningfully for "All" — Google Maps can return
+    # 100-120+ results but needs a lot of scroll attempts to surface them all
+    effective_cap = min(max_results, 200) if max_results < 9999 else 200
+    max_scrolls = max(30, effective_cap * 6)
 
     while scrolls < max_scrolls and len(results) < max_results:
         count_before = len(results)
@@ -158,15 +160,13 @@ def _scroll_and_extract(page, max_results: int, results: list, q=None) -> list:
                 seen_names.add(name)
                 results.append(listing)
                 if q is not None:
-                    q.put(listing)   # NEW — push it out immediately
+                    q.put(listing)
 
             feed = page.query_selector('div[role="feed"]')
             if feed and scroll_pos_before:
                 feed.evaluate(f"el => el.scrollTop = {scroll_pos_before}")
                 time.sleep(0.3)
 
-        # More reliable end-of-list check: look at the feed's own text
-        # instead of a minified class name that can change between deploys
         try:
             feed_text = feed.inner_text() if feed else ""
             if "you've reached the end of the list" in feed_text.lower():
@@ -174,23 +174,37 @@ def _scroll_and_extract(page, max_results: int, results: list, q=None) -> list:
         except Exception:
             pass
 
+        # Real scroll: try a genuine mouse wheel event first (more reliable
+        # at triggering Maps' lazy-load than a JS scrollBy), fall back to JS
         try:
             if feed:
-                feed.evaluate("el => el.scrollBy(0, 1200)")
+                box = feed.bounding_box()
+                if box:
+                    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                    page.mouse.wheel(0, 1200)
+                else:
+                    feed.evaluate("el => el.scrollBy(0, 1200)")
             else:
-                page.evaluate("window.scrollBy(0, 1200)")
+                page.mouse.wheel(0, 1200)
         except Exception:
-            pass
+            try:
+                if feed:
+                    feed.evaluate("el => el.scrollBy(0, 1200)")
+            except Exception:
+                pass
 
         time.sleep(SCROLL_PAUSE)
         scrolls += 1
 
         if len(results) == count_before:
             no_new_count += 1
-            # Give it more room before giving up — Maps can lag on loading
-            # more results, especially after several detail-page round trips
-            if no_new_count >= 6:
+            # Give Maps real room to lazy-load — past ~30 results the panel
+            # often stalls for several scroll attempts before more appear
+            if no_new_count >= 15:
                 break
+            # On a stall, wait a bit longer before the next attempt instead
+            # of immediately retrying at the same pace
+            time.sleep(1.5)
         else:
             no_new_count = 0
 
