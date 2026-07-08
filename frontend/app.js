@@ -750,7 +750,7 @@ function downloadCSV() {
         r.website_linkedin ?? '',
       ].map(csvEscape).join(',') + '\n';
     });
-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
   } else if (state.activeTab === 'csv' && state.csvData) {
     const colIdx = parseInt(document.getElementById('url-column').value, 10);
     csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn']
