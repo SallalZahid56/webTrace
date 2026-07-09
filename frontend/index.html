@@ -133,6 +133,16 @@
 
           <div class="divider"></div>
 
+          <div class="section-lbl">Skip already-scraped businesses (optional)</div>
+          <textarea id="maps-skip-input" rows="4"
+            placeholder="Paste business names or website URLs already scraped, one per line&#10;e.g. Joe's Pizza&#10;https://acmeplumbing.com"></textarea>
+          <div class="url-meta" style="margin-top:6px">
+            <span id="maps-skip-count">0 entries to skip</span>
+            <button onclick="clearMapsSkip()">Clear</button>
+          </div>
+
+          <div class="divider"></div>
+
           <!-- How to get the URL guide -->
           <div class="maps-how-to">
             <div class="maps-how-title">
