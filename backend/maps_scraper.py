@@ -21,12 +21,12 @@ def _clean(text: str) -> str:
 
 # ── Main entry point (async wrapper for FastAPI) ──────────────────
 
-async def scrape_maps(url: str, max_results: int = 20) -> dict:
+async def scrape_maps(url: str, max_results: int = 20, skip_list: list[str] | None = None) -> dict:
     result_container = {}
 
     def run_in_thread():
         try:
-            result_container['data'] = _scrape_maps_sync(url, max_results)
+            result_container['data'] = _scrape_maps_sync(url, max_results, skip_list=skip_list)
         except Exception as e:
             result_container['data'] = {"results": [], "error": str(e)}
 
@@ -40,7 +40,7 @@ async def scrape_maps(url: str, max_results: int = 20) -> dict:
 
 
 # ── Streaming entry point — yields each listing as it's scraped ──────
-async def scrape_maps_stream(url: str, max_results: int = 20):
+async def scrape_maps_stream(url: str, max_results: int = 20, skip_list: list[str] | None = None):
     """
     Async generator version of scrape_maps. Runs Playwright in a background
     thread as before, but yields each business listing to the caller the
@@ -52,7 +52,7 @@ async def scrape_maps_stream(url: str, max_results: int = 20):
 
     def run_in_thread():
         try:
-            data = _scrape_maps_sync(url, max_results, q)
+            data = _scrape_maps_sync(url, max_results, q, skip_list=skip_list)
             result_container['error'] = data.get('error')
         except Exception as e:
             result_container['error'] = str(e)
@@ -72,9 +72,30 @@ async def scrape_maps_stream(url: str, max_results: int = 20):
     yield {"__final__": True, "error": result_container.get('error')}
 
 
+
+def _build_skip_sets(skip_list: list[str]) -> tuple[set, set]:
+    """Split a mixed list of names/URLs into a name-match set and a domain-match set."""
+    skip_names = set()
+    skip_domains = set()
+    for entry in skip_list or []:
+        entry = entry.strip()
+        if not entry:
+            continue
+        if entry.lower().startswith("http"):
+            try:
+                domain = urlparse(entry).netloc.lower().replace("www.", "")
+                if domain:
+                    skip_domains.add(domain)
+            except Exception:
+                pass
+        else:
+            skip_names.add(entry.strip().lower())
+    return skip_names, skip_domains
+
+
 # ── Sync Playwright scrape ────────────────────────────────────────
 
-def _scrape_maps_sync(url: str, max_results: int, q=None) -> dict:
+def _scrape_maps_sync(url: str, max_results: int, q=None, skip_list: list[str] | None = None) -> dict:
     results = []
     error   = None
 
@@ -112,7 +133,7 @@ def _scrape_maps_sync(url: str, max_results: int, q=None) -> dict:
 
             time.sleep(2)
             try:
-                _scroll_and_extract(page, max_results, results, q)
+                _scroll_and_extract(page, max_results, results, q, skip_list=skip_list)
             except Exception as e:
                 error = f"Scraping interrupted after {len(results)} results: {str(e)}"
             browser.close()
@@ -125,8 +146,10 @@ def _scrape_maps_sync(url: str, max_results: int, q=None) -> dict:
 
 # ── Scroll + extract ──────────────────────────────────────────────
 
-def _scroll_and_extract(page, max_results: int, results: list, q=None) -> list:
-    seen_names   = set()
+def _scroll_and_extract(page, max_results: int, results: list, q=None, skip_list: list[str] | None = None) -> list:
+    skip_names, skip_domains = _build_skip_sets(skip_list or [])
+
+    seen_names   = set(skip_names)  # pre-seed so already-known names are never clicked into
     scrolls      = 0
     no_new_count = 0
 
@@ -146,21 +169,32 @@ def _scroll_and_extract(page, max_results: int, results: list, q=None) -> list:
         for card in cards:
             name = (card.get_attribute("aria-label") or "").strip()
             href = card.get_attribute("href") or ""
-            if name and name not in seen_names and href:
+            if name and name.lower() not in seen_names and href:
                 candidates.append((name, href))
 
         for name, href in candidates:
             if len(results) >= max_results:
                 break
-            if name in seen_names:
+            if name.lower() in seen_names:
                 continue
 
             listing = _extract_detail(page, name, href)
             if listing:
-                seen_names.add(name)
-                results.append(listing)
-                if q is not None:
-                    q.put(listing)
+                seen_names.add(name.lower())
+
+                site_domain = ""
+                if listing.get("website"):
+                    try:
+                        site_domain = urlparse(listing["website"]).netloc.lower().replace("www.", "")
+                    except Exception:
+                        pass
+
+                if site_domain and site_domain in skip_domains:
+                    pass  # known business — don't add to results/queue
+                else:
+                    results.append(listing)
+                    if q is not None:
+                        q.put(listing)
 
             feed = page.query_selector('div[role="feed"]')
             if feed and scroll_pos_before:

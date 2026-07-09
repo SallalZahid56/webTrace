@@ -57,6 +57,17 @@ function parseUrlText(text) {
     .filter(l => l.startsWith('http://') || l.startsWith('https://'));
 }
 
+document.getElementById('maps-skip-input').addEventListener('input', function () {
+  const n = parseSkipText(this.value).length;
+  document.getElementById('maps-skip-count').textContent = `${n} entr${n === 1 ? 'y' : 'ies'} to skip`;
+});
+function clearMapsSkip() {
+  document.getElementById('maps-skip-input').value = '';
+  document.getElementById('maps-skip-count').textContent = '0 entries to skip';
+}
+function parseSkipText(text) {
+  return text.split('\n').map(l => l.trim()).filter(Boolean);
+}
 
 // ── Maps UI ────────────────────────────────────────────────────────
 function updateMapsMeta() {
@@ -247,6 +258,7 @@ function extractSocialsByPlatform(socials) {
 // ── Maps flow ──────────────────────────────────────────────────────
 async function startMapsFlow(mapsUrl) {
   const maxResults = parseInt(document.getElementById('maps-max-results').value, 10);
+  const skipList = parseSkipText(document.getElementById('maps-skip-input').value);
 
   try {
     const ping = await fetch(`${API_BASE}/`);
@@ -284,7 +296,7 @@ async function startMapsFlow(mapsUrl) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
-      body: JSON.stringify({ url: mapsUrl, max_results: maxResults }),
+      body: JSON.stringify({ url: mapsUrl, max_results: maxResults, skip_list: skipList }),
     });
 
     if (!res.ok) {

@@ -54,6 +54,7 @@ class ScrapeResponse(BaseModel):
 class MapsRequest(BaseModel):
     url: str
     max_results: int = 20
+    skip_list: List[str] = []
 
 class MapsBusinessResult(BaseModel):
     name:      str
@@ -97,7 +98,7 @@ async def maps_scrape_stream(req: MapsRequest):
         )
 
     async def event_generator():
-        async for item in scrape_maps_stream(req.url, req.max_results):
+        async for item in scrape_maps_stream(req.url, req.max_results, req.skip_list):
             yield json.dumps(item) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
