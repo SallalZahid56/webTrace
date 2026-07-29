@@ -1,5 +1,5 @@
 // ── Config ─────────────────────────────────────────────────────────
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'https://webtrace-6mp2.onrender.com/';
 
 // ── State ──────────────────────────────────────────────────────────
 const state = {
