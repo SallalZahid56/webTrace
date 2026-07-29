@@ -344,13 +344,18 @@ async function startMapsFlow(mapsUrl) {
         if (biz.website) {
           try {
             const scrapeData = await scrapeUrl(biz.website);
+
+            const mapsPhoneNorm = normalizePhone(biz.phone);
+            const uniqueSitePhones = dedupePhones(scrapeData.phones)
+              .filter(p => normalizePhone(p) !== mapsPhoneNorm); // drop if same as Maps phone
+
             const merged = {
               ...biz,
               maps_phone: biz.phone || '',
-              website_phone: scrapeData.phones?.join(' | ') || '',
-              emails: scrapeData.emails,
+              website_phones: uniqueSitePhones,       // array, deduped, no Maps-phone duplicate
+              emails: dedupePhones(scrapeData.emails), // harmless reuse — just removes exact dupes
               phones: scrapeData.phones,
-              whatsapp: scrapeData.whatsapp,
+              whatsapp: dedupePhones(scrapeData.whatsapp),
               maps_facebook: biz.facebook || '',
               website_facebook: scrapeData.facebook || '',
               maps_instagram: biz.instagram || '',
@@ -365,7 +370,7 @@ async function startMapsFlow(mapsUrl) {
           } catch (err) {
             const merged = {
               ...biz,
-              maps_phone: biz.phone || '', website_phone: '',
+              maps_phone: biz.phone || '', website_phones: [],
               emails: [], phones: [], whatsapp: [],
               maps_facebook: biz.facebook || '', website_facebook: '',
               maps_instagram: biz.instagram || '', website_instagram: '',
@@ -380,7 +385,7 @@ async function startMapsFlow(mapsUrl) {
         } else {
           const merged = {
             ...biz,
-            maps_phone: biz.phone || '', website_phone: '',
+            maps_phone: biz.phone || '', website_phones: [],
             emails: [], phones: [], whatsapp: [],
             maps_facebook: biz.facebook || '', website_facebook: '',
             maps_instagram: biz.instagram || '', website_instagram: '',
@@ -454,9 +459,9 @@ function buildMapsRowHTML(idx, biz, status) {
   const emails = biz.emails ?? [];
   const whatsapp = biz.whatsapp ?? [];
   const mapsPhone = biz.maps_phone || '';
-  const websitePhone = biz.website_phone || '';
+  const websitePhones = biz.website_phones ?? [];
 
-  const hasData = emails.length || whatsapp.length || mapsPhone || websitePhone ||
+  const hasData = emails.length || whatsapp.length || mapsPhone || websitePhones.length ||
     biz.maps_facebook || biz.website_facebook ||
     biz.maps_instagram || biz.website_instagram ||
     biz.maps_linkedin || biz.website_linkedin;
@@ -487,7 +492,7 @@ function buildMapsRowHTML(idx, biz, status) {
     <td>${websiteCell}</td>
     <td>${badge}</td>
     <td>${mapsPhone ? `<span class="data-mono">${mapsPhone}</span>` : `<span class="muted">—</span>`}</td>
-    <td>${websitePhone ? `<span class="data-mono">${websitePhone}</span>` : `<span class="muted">—</span>`}</td>
+    <td>${websitePhones.length ? websitePhones.map(p => `<span class="data-mono">${p}</span>`).join('<br>') : `<span class="muted">${mapsPhone ? 'Same as Maps' : '—'}</span>`}</td>
     <td>${emails.length ? emails.map(e => `<span class="data-mono">${e}</span>`).join('<br>') : `<span class="muted">—</span>`}</td>
     <td>${whatsapp.length ? whatsapp.map(w => `<span class="data-mono">${w}</span>`).join('<br>') : `<span class="muted">—</span>`}</td>
     <td>${socialCell(biz.maps_facebook, biz.website_facebook, 'Facebook')}</td>
@@ -682,7 +687,7 @@ function buildTableHead(mode) {
   let cols = [];
 
   if (mode === 'maps') {
-    cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Maps Phone', 'Website Phone', 'Emails', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
+    cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Maps Phone', 'Website Phone(s)', 'Emails', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   }
@@ -736,24 +741,31 @@ function downloadCSV() {
   let csv = '';
 
   if (state.activeTab === 'maps') {
-    // Maps mode — full business profile + scraped contacts, sources kept separate
+    // How many "Website Phone" columns we need — sized to the busiest result
+    const maxSitePhones = Math.max(1, ...state.results.map(r => (r.website_phones || []).length));
+    const sitePhoneHeaders = Array.from({ length: maxSitePhones }, (_, i) => `Website Phone ${i + 1}`);
+
     csv += ['Business Name', 'Address', 'Rating', 'Reviews', 'Website',
-      'Maps Phone', 'Website Phone', 'Emails', 'WhatsApp',
+      'Maps Phone', ...sitePhoneHeaders, 'Emails', 'WhatsApp',
       'Maps Facebook', 'Website Facebook',
       'Maps Instagram', 'Website Instagram',
       'Maps LinkedIn', 'Website LinkedIn']
       .map(csvEscape).join(',') + '\n';
+
     state.results.forEach(r => {
+      const sitePhones = r.website_phones || [];
+      const sitePhoneCells = Array.from({ length: maxSitePhones }, (_, i) => csvSafePhone(sitePhones[i] ?? ''));
+
       csv += [
         r.name ?? '',
         r.address ?? '',
         r.rating ?? '',
         r.reviews ?? '',
         r.website ?? '',
-        r.maps_phone ?? '',
-        r.website_phone ?? '',
-        r.emails?.join(' | ') ?? '',
-        r.whatsapp?.join(' | ') ?? '',
+        csvSafePhone(r.maps_phone ?? ''),
+        ...sitePhoneCells,
+        [...new Set(r.emails || [])].join(' | '),
+        (r.whatsapp || []).map(csvSafePhone).join(' | '),
         r.maps_facebook ?? '',
         r.website_facebook ?? '',
         r.maps_instagram ?? '',
@@ -761,8 +773,7 @@ function downloadCSV() {
         r.maps_linkedin ?? '',
         r.website_linkedin ?? '',
       ].map(csvEscape).join(',') + '\n';
-    });
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+    });                                                                                            
   } else if (state.activeTab === 'csv' && state.csvData) {
     const colIdx = parseInt(document.getElementById('url-column').value, 10);
     csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn']
@@ -786,9 +797,9 @@ function downloadCSV() {
     state.results.forEach(r => {
       csv += [
         r.url,
-        r.emails?.join(' | ') ?? '',
-        r.phones?.join(' | ') ?? '',
-        r.whatsapp?.join(' | ') ?? '',
+        [...new Set(r.emails || [])].join(' | '),
+        dedupePhones(r.phones).map(csvSafePhone).join(' | '),
+        dedupePhones(r.whatsapp).map(csvSafePhone).join(' | '),
         r.facebook ?? '',
         r.instagram ?? '',
         r.linkedin ?? '',
@@ -809,6 +820,7 @@ function downloadCSV() {
 
 function csvEscape(v) {
   const s = String(v ?? '');
+  if (/^="/.test(s) && s.endsWith('"')) return s; // already Sheets-safe, don't re-wrap
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -820,4 +832,30 @@ function showToast(msg, type = 'info') {
   t.className = `toast toast-${type}`; t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(6px)'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ── Phone dedup + Sheets-safe formatting ────────────────────────────
+function normalizePhone(p) {
+  return (p || '').replace(/\D/g, '');
+}
+function dedupePhones(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const p of arr || []) {
+    const norm = normalizePhone(p);
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(p);
+  }
+  return out;
+}
+// Prevents Google Sheets / Excel from reading a leading +, -, =, or @
+// as the start of a formula, which is what causes the paste error.
+function csvSafePhone(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  if (/^[+\-=@]/.test(s)) {
+    return `="${s.replace(/"/g, '""')}"`;
+  }
+  return s;
 }
