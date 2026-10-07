@@ -19,11 +19,13 @@ function switchTab(tab) {
   document.getElementById('tab-urls').classList.toggle('active', tab === 'urls');
   document.getElementById('tab-csv').classList.toggle('active', tab === 'csv');
   document.getElementById('tab-maps').classList.toggle('active', tab === 'maps');
+  document.getElementById('tab-linkedin').classList.toggle('active', tab === 'linkedin');
 
   // Toggle panels
   document.getElementById('panel-urls').style.display = tab === 'urls' ? 'block' : 'none';
   document.getElementById('panel-csv').style.display = tab === 'csv' ? 'block' : 'none';
   document.getElementById('panel-maps').style.display = tab === 'maps' ? 'block' : 'none';
+  document.getElementById('panel-linkedin').style.display = tab === 'linkedin' ? 'block' : 'none';
 
   // Hide options section in Google and Maps mode
   const showOptions = tab === 'urls' || tab === 'csv';
@@ -35,6 +37,10 @@ function switchTab(tab) {
     runBtn.innerHTML = `
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/></svg>
       Scrape Maps`;
+  } else if (tab === 'linkedin') {
+    runBtn.innerHTML = `
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 7.5h-9v9h9v-9Z"/></svg>
+      Search LinkedIn`;
   } else {
     runBtn.innerHTML = `
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -100,6 +106,12 @@ function setMapsMaxResults(btn) {
   btn.classList.add('active');
   document.getElementById('maps-max-results').value = btn.dataset.val;
   updateMapsMeta();
+}
+
+function setLinkedInMaxResults(btn) {
+  document.querySelectorAll('#panel-linkedin .li-num-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('linkedin-max-results').value = btn.dataset.val;
 }
 
 // ── Option tiles ───────────────────────────────────────────────────
@@ -435,6 +447,95 @@ async function startMapsFlow(mapsUrl) {
   finishScan(listingCount);
 }
 
+
+// ── LinkedIn flow ──────────────────────────────────────────────────
+async function startLinkedInFlow(query) {
+  const maxResults = parseInt(document.getElementById('linkedin-max-results').value, 10);
+
+  try {
+    const ping = await fetch(`${API_BASE}/`);
+    if (!ping.ok) throw new Error();
+  } catch {
+    showToast('Cannot reach backend. Is uvicorn running on port 8000?', 'error');
+    return;
+  }
+
+  state.isRunning = true;
+  state.stopRequested = false;
+  state.results = [];
+  setRunningUI(true);
+
+  document.getElementById('input-section').style.display = 'none';
+  document.getElementById('activity-feed').classList.add('show');
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('header-status').classList.add('show');
+  document.getElementById('header-status-text').textContent = 'Searching…';
+  document.getElementById('progress-strip').classList.add('show');
+  document.getElementById('prog-label').textContent = 'Querying Google for LinkedIn profiles…';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('table-wrap').style.display = 'block';
+  buildTableHead('linkedin');
+  document.getElementById('results-body').innerHTML = '';
+  document.getElementById('feed-list').innerHTML = '';
+
+  try {
+    const res = await fetch(`${API_BASE}/linkedin-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, max_results: maxResults }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    if (data.error) {
+      showToast(`LinkedIn search error: ${data.error}`, 'error');
+      resetToInput();
+      return;
+    }
+
+    data.results.forEach((person, i) => {
+      state.results.push(person);
+      addLinkedInTableRow(i + 1, person);
+      document.getElementById('feed-list').insertAdjacentHTML(
+        'beforeend',
+        buildFeedItem(i + 1, person.name, 'done', null)
+      );
+    });
+
+    document.getElementById('results-sub').textContent = `${data.results.length} profiles found`;
+    document.getElementById('header-status-text').textContent = `${data.results.length} found`;
+
+    if (data.results.length === 0) {
+      showToast('No LinkedIn profiles found for that query.', 'info');
+      resetToInput();
+      return;
+    }
+
+    finishScan(data.results.length);
+  } catch (err) {
+    showToast(`Failed: ${err.message}`, 'error');
+    resetToInput();
+  }
+}
+
+function addLinkedInTableRow(idx, person) {
+  const tr = document.createElement('tr');
+  tr.id = `row-${idx}`; tr.className = 'row-appear';
+  tr.innerHTML = `
+    <td class="idx-cell">${idx}</td>
+    <td><div style="font-size:12px;font-weight:500;color:var(--slate-800)">${person.name || '—'}</div></td>
+    <td><span style="font-size:11px;color:var(--slate-500)">${person.title || '—'}</span></td>
+    <td><span style="font-size:11px;color:var(--slate-500)">${person.company || '—'}</span></td>
+    <td><a href="${person.url}" target="_blank" class="social-a">${person.url}</a></td>`;
+  document.getElementById('results-body').appendChild(tr);
+  tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 // ── Maps table rows ────────────────────────────────────────────────
 function addMapsTableRow(idx, biz, status) {
   const tr = document.createElement('tr');
@@ -534,6 +635,15 @@ async function startScraping() {
     const isValid = mapsUrl.includes('google.com/maps') || mapsUrl.includes('maps.google.com');
     if (!isValid) { showToast('Invalid Maps URL — must contain google.com/maps', 'error'); return; }
     await startMapsFlow(mapsUrl);
+    return;
+  }
+
+
+  // ── LinkedIn mode ──
+  if (state.activeTab === 'linkedin') {
+    const query = document.getElementById('linkedin-query-input').value.trim();
+    if (!query) { showToast('Please enter a search query.', 'error'); return; }
+    await startLinkedInFlow(query);
     return;
   }
 
@@ -688,6 +798,8 @@ function buildTableHead(mode) {
 
   if (mode === 'maps') {
     cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Maps Phone', 'Website Phone(s)', 'Emails', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
+  } else if (mode === 'linkedin') {
+    cols = ['#', 'Name', 'Title', 'Company', 'LinkedIn URL'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   }
@@ -773,7 +885,12 @@ function downloadCSV() {
         r.maps_linkedin ?? '',
         r.website_linkedin ?? '',
       ].map(csvEscape).join(',') + '\n';
-    });                                                                                            
+    });
+  } else if (state.activeTab === 'linkedin') {
+    csv += ['Name', 'Title', 'Company', 'LinkedIn URL'].map(csvEscape).join(',') + '\n';
+    state.results.forEach(r => {
+      csv += [r.name ?? '', r.title ?? '', r.company ?? '', r.url ?? ''].map(csvEscape).join(',') + '\n';
+    });
   } else if (state.activeTab === 'csv' && state.csvData) {
     const colIdx = parseInt(document.getElementById('url-column').value, 10);
     csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn']

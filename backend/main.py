@@ -13,6 +13,7 @@ from typing import List, Optional
 from scraper import scrape_url
 from fastapi.responses import StreamingResponse
 from maps_scraper import scrape_maps, scrape_maps_stream, is_valid_maps_url
+from linkedin_search import search_linkedin_profiles
 
 app = FastAPI(title="WebTrace API", version="2.0.0")
 
@@ -72,6 +73,24 @@ class MapsResponse(BaseModel):
     results: List[MapsBusinessResult]
     error:   Optional[str] = None
 
+
+class LinkedInSearchRequest(BaseModel):
+    query: str
+    max_results: int = 20
+
+class LinkedInProfileResult(BaseModel):
+    name: str
+    title: str = ""
+    company: str = ""
+    location: str = ""
+    url: str
+    snippet: str = ""
+
+class LinkedInSearchResponse(BaseModel):
+    query: str
+    results: List[LinkedInProfileResult]
+    error: Optional[str] = None
+
 # ── Routes ────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -124,4 +143,15 @@ async def maps_scrape(req: MapsRequest):
         "url":     req.url,
         "results": data.get("results", []),
         "error":   data.get("error"),
+    }
+
+
+
+@app.post("/linkedin-search", response_model=LinkedInSearchResponse)
+async def linkedin_search(req: LinkedInSearchRequest):
+    data = await search_linkedin_profiles(req.query, req.max_results)
+    return {
+        "query": req.query,
+        "results": data.get("results", []),
+        "error": data.get("error"),
     }

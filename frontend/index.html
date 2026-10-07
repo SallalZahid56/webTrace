@@ -54,6 +54,14 @@
             </svg>
             Maps
           </button>
+          <button id="tab-linkedin" class="tab-btn" onclick="switchTab('linkedin')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+              style="width:11px;height:11px;display:inline;margin-right:3px;vertical-align:-1px">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 7.5h-9v9h9v-9Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 10.5h1.5M8.25 13.5h3" />
+            </svg>
+            LinkedIn
+          </button>
         </div>
 
         <!-- ── URL panel ── -->
@@ -164,6 +172,50 @@
 
         </div>
         <!-- end panel-maps -->
+
+                <!-- ── LinkedIn Search panel (NEW) ── -->
+        <div id="panel-linkedin" style="display:none">
+
+          <div class="section-lbl">Search query</div>
+          <input type="text" id="linkedin-query-input" class="google-query-input"
+            placeholder='e.g. Founder Ohio, or "VP Sales" fintech' />
+          <div class="url-meta" style="margin-top:6px">
+            <span id="linkedin-query-hint">Searches site:linkedin.com/in via Google</span>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section-lbl">Max results</div>
+          <div class="num-results-row">
+            <button class="li-num-chip active" data-val="10" onclick="setLinkedInMaxResults(this)">10</button>
+            <button class="li-num-chip" data-val="20" onclick="setLinkedInMaxResults(this)">20</button>
+            <button class="li-num-chip" data-val="30" onclick="setLinkedInMaxResults(this)">30</button>
+            <button class="li-num-chip" data-val="50" onclick="setLinkedInMaxResults(this)">50</button>
+            <button class="li-num-chip" data-val="100" onclick="setLinkedInMaxResults(this)">100</button>
+          </div>
+          <input type="hidden" id="linkedin-max-results" value="10" />
+
+          <div class="divider"></div>
+
+          <div class="maps-how-to">
+            <div class="maps-how-title">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                style="width:12px;height:12px;flex-shrink:0">
+                <circle cx="12" cy="12" r="10" />
+                <path stroke-linecap="round" d="M12 16v-4M12 8h.01" />
+              </svg>
+              How this works
+            </div>
+            <ol class="maps-how-steps">
+              <li>Type keywords — title, company, location</li>
+              <li>We search Google for indexed LinkedIn profiles</li>
+              <li>No LinkedIn login or account used — zero ban risk</li>
+              <li>Uses your free Google Search API quota (100/day)</li>
+            </ol>
+          </div>
+
+        </div>
+        <!-- end panel-linkedin -->
 
         <!-- Options (hidden in Google mode, shown in URL/CSV modes) -->
         <div id="options-section">
