@@ -2,10 +2,8 @@ import os
 import re
 import httpx
 
-GOOGLE_API_KEY = os.environ.get("GOOGLE_CSE_API_KEY", "")
-GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "")
-
-SEARCH_URL = "https://www.googleapis.com/customsearch/v1"
+BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
+SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 
 
 def _parse_name_title_company(title: str) -> dict:
@@ -26,40 +24,43 @@ def _parse_name_title_company(title: str) -> dict:
 
 
 async def search_linkedin_profiles(query: str, max_results: int = 20) -> dict:
-    if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
-        return {"results": [], "error": "Missing GOOGLE_CSE_API_KEY or GOOGLE_CSE_ID env vars"}
+    if not BRAVE_API_KEY:
+        return {"results": [], "error": "Missing BRAVE_API_KEY env var"}
 
     full_query = f'site:linkedin.com/in {query}'
     results = []
     error = None
 
+    headers = {
+        "Accept": "application/json",
+        "X-Subscription-Token": BRAVE_API_KEY,
+    }
+
     async with httpx.AsyncClient(timeout=15) as client:
-        start = 1
-        while len(results) < max_results and start <= 91:
+        offset = 0
+        while len(results) < max_results and offset < 9:
             params = {
-                "key": GOOGLE_API_KEY,
-                "cx": GOOGLE_CSE_ID,
                 "q": full_query,
-                "start": start,
-                "num": min(10, max_results - len(results)),
+                "count": min(20, max_results - len(results)),
+                "offset": offset,
             }
             try:
-                resp = await client.get(SEARCH_URL, params=params)
+                resp = await client.get(SEARCH_URL, headers=headers, params=params)
                 data = resp.json()
             except Exception as e:
                 error = f"Request failed: {str(e)}"
                 break
 
             if "error" in data:
-                error = data["error"].get("message", "Unknown API error")
+                error = str(data["error"])
                 break
 
-            items = data.get("items", [])
+            items = data.get("web", {}).get("results", [])
             if not items:
                 break
 
             for item in items:
-                link = item.get("link", "")
+                link = item.get("url", "")
                 if "linkedin.com/in/" not in link:
                     continue
                 parsed = _parse_name_title_company(item.get("title", ""))
@@ -69,9 +70,9 @@ async def search_linkedin_profiles(query: str, max_results: int = 20) -> dict:
                     "company": parsed["company"],
                     "location": "",
                     "url": link.split("?")[0],
-                    "snippet": item.get("snippet", ""),
+                    "snippet": item.get("description", ""),
                 })
 
-            start += 10
+            offset += 1
 
     return {"results": results[:max_results], "error": error}
