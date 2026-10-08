@@ -2,10 +2,8 @@ import os
 import re
 import httpx
 
-GOOGLE_API_KEY = os.environ.get("GOOGLE_CSE_API_KEY", "")
-GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "")
-
-SEARCH_URL = "https://www.googleapis.com/customsearch/v1"
+SERPER_API_KEY = os.environ.get("SERPER_API_KEY", "")
+SEARCH_URL = "https://google.serper.dev/search"
 
 
 def _parse_name_title_company(title: str) -> dict:
@@ -25,38 +23,66 @@ def _parse_name_title_company(title: str) -> dict:
     return {"name": name, "title": job_title.strip(), "company": company.strip()}
 
 
-async def search_linkedin_profiles(query: str, max_results: int = 20) -> dict:
-    if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
-        return {"results": [], "error": "Missing GOOGLE_CSE_API_KEY or GOOGLE_CSE_ID env vars"}
 
-    # Engine is scoped to linkedin.com/in/* in its own settings, so no need
-    # to add "site:linkedin.com/in" here — just pass the keywords through.
-    full_query = query
+def _terms(text: str) -> list:
+    return [t.strip().strip('"') for t in re.split(r"[,\n]", text or "") if t.strip()]
+
+
+def build_query(query="", title="", niche="", location="", exclude="") -> str:
+    parts = ["site:linkedin.com/in"]
+
+    titles = _terms(title)
+    if titles:
+        parts.append("(" + " OR ".join(f'intitle:"{t}"' for t in titles) + ")")
+
+    niches = _terms(niche)
+    if niches:
+        parts.append("(" + " OR ".join(f'"{n}"' for n in niches) + ")")
+
+    locs = _terms(location)
+    if locs:
+        parts.append("(" + " OR ".join(f'"{l}"' for l in locs) + ")")
+
+    if query.strip():
+        parts.append(query.strip())
+
+    for ex in _terms(exclude):
+        parts.append(f'-"{ex}"')
+
+    return " ".join(parts)
+
+
+async def search_linkedin_profiles(query: str = "", max_results: int = 20,
+                                   title: str = "", niche: str = "",
+                                   location: str = "", exclude: str = "") -> dict:
+    if not SERPER_API_KEY:
+        return {"results": [], "error": "Missing SERPER_API_KEY env var", "query_used": ""}
+
+    full_query = build_query(query, title, niche, location, exclude)
     results = []
     error = None
 
+    headers = {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json",
+    }
+
     async with httpx.AsyncClient(timeout=15) as client:
-        start = 1
-        while len(results) < max_results and start <= 91:  # API caps at 100 total (10 pages)
-            params = {
-                "key": GOOGLE_API_KEY,
-                "cx": GOOGLE_CSE_ID,
-                "q": full_query,
-                "start": start,
-                "num": min(10, max_results - len(results)),
-            }
+        page = 1
+        while len(results) < max_results and page <= 10:
+            payload = {"q": full_query, "num": 10, "page": page}
             try:
-                resp = await client.get(SEARCH_URL, params=params)
+                resp = await client.post(SEARCH_URL, headers=headers, json=payload)
                 data = resp.json()
             except Exception as e:
                 error = f"Request failed: {str(e)}"
                 break
 
-            if "error" in data:
-                error = data["error"].get("message", "Unknown API error")
+            if resp.status_code != 200:
+                error = data.get("message", f"Serper error {resp.status_code}")
                 break
 
-            items = data.get("items", [])
+            items = data.get("organic", [])
             if not items:
                 break
 
@@ -74,6 +100,6 @@ async def search_linkedin_profiles(query: str, max_results: int = 20) -> dict:
                     "snippet": item.get("snippet", ""),
                 })
 
-            start += 10
+            page += 1
 
-    return {"results": results[:max_results], "error": error}
+    return {"results": results[:max_results], "error": error, "query_used": full_query}

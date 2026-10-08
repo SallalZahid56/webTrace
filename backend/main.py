@@ -77,7 +77,11 @@ class MapsResponse(BaseModel):
 
 
 class LinkedInSearchRequest(BaseModel):
-    query: str
+    query: str = ""
+    title: str = ""
+    niche: str = ""
+    location: str = ""
+    exclude: str = ""
     max_results: int = 20
 
 class LinkedInProfileResult(BaseModel):
@@ -151,9 +155,11 @@ async def maps_scrape(req: MapsRequest):
 
 @app.post("/linkedin-search", response_model=LinkedInSearchResponse)
 async def linkedin_search(req: LinkedInSearchRequest):
-    data = await search_linkedin_profiles(req.query, req.max_results)
+    data = await search_linkedin_profiles(
+        req.query, req.max_results, req.title, req.niche, req.location, req.exclude
+    )
     return {
-        "query": req.query,
+        "query": data.get("query_used", req.query),
         "results": data.get("results", []),
         "error": data.get("error"),
     }
