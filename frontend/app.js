@@ -449,7 +449,7 @@ async function startMapsFlow(mapsUrl) {
 
 
 // ── LinkedIn flow ──────────────────────────────────────────────────
-async function startLinkedInFlow(query) {
+async function startLinkedInFlow(filters) {
   const maxResults = parseInt(document.getElementById('linkedin-max-results').value, 10);
 
   try {
@@ -482,7 +482,7 @@ async function startLinkedInFlow(query) {
     const res = await fetch(`${API_BASE}/linkedin-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, max_results: maxResults }),
+      body: JSON.stringify({ ...filters, max_results: maxResults }),
     });
 
     if (!res.ok) {
@@ -641,9 +641,19 @@ async function startScraping() {
 
   // ── LinkedIn mode ──
   if (state.activeTab === 'linkedin') {
-    const query = document.getElementById('linkedin-query-input').value.trim();
-    if (!query) { showToast('Please enter a search query.', 'error'); return; }
-    await startLinkedInFlow(query);
+    const val = id => document.getElementById(id).value.trim();
+    const filters = {
+      query: val('linkedin-query-input'),
+      title: val('linkedin-title-input'),
+      niche: val('linkedin-niche-input'),
+      location: val('linkedin-location-input'),
+      exclude: val('linkedin-exclude-input'),
+    };
+    if (!filters.query && !filters.title && !filters.niche && !filters.location) {
+      showToast('Enter at least a title, niche, location, or keyword.', 'error');
+      return;
+    }
+    await startLinkedInFlow(filters);
     return;
   }
 

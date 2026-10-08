@@ -176,12 +176,25 @@
                 <!-- ── LinkedIn Search panel (NEW) ── -->
         <div id="panel-linkedin" style="display:none">
 
-          <div class="section-lbl">Search query</div>
+                    <div class="section-lbl">Job title</div>
+          <input type="text" id="linkedin-title-input" class="google-query-input"
+            placeholder="e.g. Founder, Owner, CEO" />
+
+          <div class="section-lbl" style="margin-top:10px">Niche / industry keywords</div>
+          <input type="text" id="linkedin-niche-input" class="google-query-input"
+            placeholder="e.g. SaaS, software, B2B (comma = any of these)" />
+
+          <div class="section-lbl" style="margin-top:10px">Location</div>
+          <input type="text" id="linkedin-location-input" class="google-query-input"
+            placeholder="e.g. Ohio, Columbus" />
+
+          <div class="section-lbl" style="margin-top:10px">Exclude words</div>
+          <input type="text" id="linkedin-exclude-input" class="google-query-input"
+            placeholder="e.g. student, intern, recruiter" />
+
+          <div class="section-lbl" style="margin-top:10px">Extra keywords (optional)</div>
           <input type="text" id="linkedin-query-input" class="google-query-input"
-            placeholder='e.g. Founder Ohio, or "VP Sales" fintech' />
-          <div class="url-meta" style="margin-top:6px">
-            <span id="linkedin-query-hint">Searches site:linkedin.com/in via Google</span>
-          </div>
+            placeholder="anything else" />
 
           <div class="divider"></div>
 
@@ -210,7 +223,7 @@
               <li>Type keywords — title, company, location</li>
               <li>We search Google for indexed LinkedIn profiles</li>
               <li>No LinkedIn login or account used — zero ban risk</li>
-              <li>Uses your free Google Search API quota (100/day)</li>
+              <li>Uses Serper credits — roughly 1 credit per 10 results</li>
             </ol>
           </div>
 
