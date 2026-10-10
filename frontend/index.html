@@ -176,6 +176,17 @@
         <!-- ── LinkedIn Search panel (NEW) ── -->
         <div id="panel-linkedin" style="display:none">
 
+          <div class="section-lbl">Search for</div>
+          <select id="linkedin-kind-input" class="google-query-input">
+            <option value="person">People</option>
+            <option value="company">Companies</option>
+          </select>
+          <div class="url-meta" style="margin-top:6px">
+            <span>A pasted URL overrides this automatically</span>
+          </div>
+
+          <div class="divider"></div>
+
           <div class="section-lbl">LinkedIn search URL (optional)</div>
           <input type="text" id="linkedin-url-input" class="google-query-input"
             placeholder="Paste a linkedin.com/search/results/people/... URL" />

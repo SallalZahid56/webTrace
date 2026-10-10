@@ -502,6 +502,9 @@ async function startLinkedInFlow(filters) {
       showToast(`Not applied: ${data.ignored_filters.join(', ')}`, 'info');
     }
 
+    state.linkedinKind = data.kind || 'person';
+    buildTableHead(state.linkedinKind === 'company' ? 'linkedin-company' : 'linkedin');
+
     data.results.forEach((person, i) => {
       state.results.push(person);
       addLinkedInTableRow(i + 1, person);
@@ -530,12 +533,20 @@ async function startLinkedInFlow(filters) {
 function addLinkedInTableRow(idx, person) {
   const tr = document.createElement('tr');
   tr.id = `row-${idx}`; tr.className = 'row-appear';
-  tr.innerHTML = `
-    <td class="idx-cell">${idx}</td>
-    <td><div style="font-size:12px;font-weight:500;color:var(--slate-800)">${person.name || '—'}</div></td>
-    <td><span style="font-size:11px;color:var(--slate-500)">${person.title || '—'}</span></td>
-    <td><span style="font-size:11px;color:var(--slate-500)">${person.company || '—'}</span></td>
-    <td><a href="${person.url}" target="_blank" class="social-a">${person.url}</a></td>`;
+  if (state.linkedinKind === 'company') {
+    tr.innerHTML = `
+      <td class="idx-cell">${idx}</td>
+      <td><div style="font-size:12px;font-weight:500;color:var(--slate-800)">${person.name || '—'}</div></td>
+      <td><span style="font-size:11px;color:var(--slate-500)">${person.snippet || '—'}</span></td>
+      <td><a href="${person.url}" target="_blank" class="social-a">${person.url}</a></td>`;
+  } else {
+    tr.innerHTML = `
+      <td class="idx-cell">${idx}</td>
+      <td><div style="font-size:12px;font-weight:500;color:var(--slate-800)">${person.name || '—'}</div></td>
+      <td><span style="font-size:11px;color:var(--slate-500)">${person.title || '—'}</span></td>
+      <td><span style="font-size:11px;color:var(--slate-500)">${person.company || '—'}</span></td>
+      <td><a href="${person.url}" target="_blank" class="social-a">${person.url}</a></td>`;
+  }
   document.getElementById('results-body').appendChild(tr);
   tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -648,6 +659,7 @@ async function startScraping() {
     const val = id => document.getElementById(id).value.trim();
     const filters = {
       linkedin_url: val('linkedin-url-input'),
+      kind: document.getElementById('linkedin-kind-input').value,
       query: val('linkedin-query-input'),
       title: val('linkedin-title-input'),
       niche: val('linkedin-niche-input'),
@@ -815,6 +827,9 @@ function buildTableHead(mode) {
     cols = ['#', 'Business', 'Address', 'Rating', 'Website', 'Status', 'Maps Phone', 'Website Phone(s)', 'Emails', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   } else if (mode === 'linkedin') {
     cols = ['#', 'Name', 'Title', 'Company', 'LinkedIn URL'];
+
+  } else if (mode === 'linkedin-company') {
+    cols = ['#', 'Company', 'Description', 'LinkedIn URL'];
   } else {
     cols = ['#', 'Site', 'Status', 'Emails', 'Phones', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn'];
   }
@@ -902,10 +917,17 @@ function downloadCSV() {
       ].map(csvEscape).join(',') + '\n';
     });
   } else if (state.activeTab === 'linkedin') {
-    csv += ['Name', 'Title', 'Company', 'LinkedIn URL'].map(csvEscape).join(',') + '\n';
-    state.results.forEach(r => {
-      csv += [r.name ?? '', r.title ?? '', r.company ?? '', r.url ?? ''].map(csvEscape).join(',') + '\n';
-    });
+    if (state.linkedinKind === 'company') {
+      csv += ['Company', 'Description', 'LinkedIn URL'].map(csvEscape).join(',') + '\n';
+      state.results.forEach(r => {
+        csv += [r.name ?? '', r.snippet ?? '', r.url ?? ''].map(csvEscape).join(',') + '\n';
+      });
+    } else {
+      csv += ['Name', 'Title', 'Company', 'LinkedIn URL'].map(csvEscape).join(',') + '\n';
+      state.results.forEach(r => {
+        csv += [r.name ?? '', r.title ?? '', r.company ?? '', r.url ?? ''].map(csvEscape).join(',') + '\n';
+      });
+    }
   } else if (state.activeTab === 'csv' && state.csvData) {
     const colIdx = parseInt(document.getElementById('url-column').value, 10);
     csv += [...state.csvHeaders, 'Emails', 'Phone Numbers', 'WhatsApp', 'Facebook', 'Instagram', 'LinkedIn']
