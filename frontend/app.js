@@ -498,6 +498,10 @@ async function startLinkedInFlow(filters) {
       return;
     }
 
+    if (data.ignored_filters?.length) {
+      showToast(`Not applied: ${data.ignored_filters.join(', ')}`, 'info');
+    }
+
     data.results.forEach((person, i) => {
       state.results.push(person);
       addLinkedInTableRow(i + 1, person);
@@ -643,14 +647,15 @@ async function startScraping() {
   if (state.activeTab === 'linkedin') {
     const val = id => document.getElementById(id).value.trim();
     const filters = {
+      linkedin_url: val('linkedin-url-input'),
       query: val('linkedin-query-input'),
       title: val('linkedin-title-input'),
       niche: val('linkedin-niche-input'),
       location: val('linkedin-location-input'),
       exclude: val('linkedin-exclude-input'),
     };
-    if (!filters.query && !filters.title && !filters.niche && !filters.location) {
-      showToast('Enter at least a title, niche, location, or keyword.', 'error');
+    if (!filters.linkedin_url && !filters.query && !filters.title && !filters.niche && !filters.location) {
+      showToast('Paste a LinkedIn URL or fill at least one filter.', 'error');
       return;
     }
     await startLinkedInFlow(filters);

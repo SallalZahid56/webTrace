@@ -173,10 +173,19 @@
         </div>
         <!-- end panel-maps -->
 
-                <!-- ── LinkedIn Search panel (NEW) ── -->
+        <!-- ── LinkedIn Search panel (NEW) ── -->
         <div id="panel-linkedin" style="display:none">
 
-                    <div class="section-lbl">Job title</div>
+          <div class="section-lbl">LinkedIn search URL (optional)</div>
+          <input type="text" id="linkedin-url-input" class="google-query-input"
+            placeholder="Paste a linkedin.com/search/results/people/... URL" />
+          <div class="url-meta" style="margin-top:6px">
+            <span>Anything you type in the fields below takes priority over the URL</span>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section-lbl">Job title</div>
           <input type="text" id="linkedin-title-input" class="google-query-input"
             placeholder="e.g. Founder, Owner, CEO" />
 
@@ -193,8 +202,7 @@
             placeholder="e.g. student, intern, recruiter" />
 
           <div class="section-lbl" style="margin-top:10px">Extra keywords (optional)</div>
-          <input type="text" id="linkedin-query-input" class="google-query-input"
-            placeholder="anything else" />
+          <input type="text" id="linkedin-query-input" class="google-query-input" placeholder="anything else" />
 
           <div class="divider"></div>
 
