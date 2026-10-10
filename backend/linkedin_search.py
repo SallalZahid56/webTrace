@@ -1,6 +1,8 @@
 import os
 import re
 import httpx
+import json
+from urllib.parse import urlparse, parse_qs
 
 SERPER_API_KEY = os.environ.get("SERPER_API_KEY", "")
 SEARCH_URL = "https://google.serper.dev/search"
@@ -52,11 +54,82 @@ def build_query(query="", title="", niche="", location="", exclude="") -> str:
     return " ".join(parts)
 
 
+
+# Add IDs you run into. Only IDs listed here get translated to words.
+GEO_NAMES = {
+    "103644278": "United States",
+}
+INDUSTRY_NAMES = {
+    # "4": "Software",   <- example: add the ID and the word(s) you want searched
+}
+NOISE_PARAMS = {"origin", "sid", "page"}
+
+
+def parse_linkedin_url(url: str) -> dict:
+    out = {"query": "", "title": "", "niche": "", "location": "", "ignored": []}
+
+    if "/sales/" in url:
+        out["ignored"].append("Sales Navigator URL (not supported, fill the fields manually)")
+        return out
+
+    qs = parse_qs(urlparse(url).query)
+
+    def first(key):
+        return (qs.get(key, [""])[0] or "").strip().strip('"')
+
+    def id_list(key):
+        raw = (qs.get(key, [""])[0] or "").strip()
+        if not raw:
+            return []
+        try:
+            val = json.loads(raw)
+            return [str(v) for v in val] if isinstance(val, list) else [str(val)]
+        except Exception:
+            return [raw.strip('"')]
+
+    keywords = first("keywords")
+    if keywords.strip(" ."):          # LinkedIn uses "." as a placeholder
+        out["query"] = keywords
+    company = first("company")
+    if company:
+        out["query"] = f'{out["query"]} "{company}"'.strip()
+
+    out["title"] = first("title")
+
+    for key, table, field in (("geoUrn", GEO_NAMES, "location"),
+                              ("industry", INDUSTRY_NAMES, "niche")):
+        known, unknown = [], []
+        for item in id_list(key):
+            (known if item in table else unknown).append(table.get(item, item))
+        out[field] = ", ".join(known)
+        if unknown:
+            out["ignored"].append(f"{key} IDs not in lookup table: {', '.join(unknown)}")
+
+    handled = {"keywords", "title", "company", "geoUrn", "industry"}
+    for key in qs:
+        if key not in handled and key not in NOISE_PARAMS:
+            out["ignored"].append(key)
+
+    return out
+
+
 async def search_linkedin_profiles(query: str = "", max_results: int = 20,
                                    title: str = "", niche: str = "",
-                                   location: str = "", exclude: str = "") -> dict:
+                                   location: str = "", exclude: str = "",
+                                   linkedin_url: str = "") -> dict:
     if not SERPER_API_KEY:
-        return {"results": [], "error": "Missing SERPER_API_KEY env var", "query_used": ""}
+        return {"results": [], "error": "Missing SERPER_API_KEY env var",
+                "query_used": "", "ignored_filters": []}
+
+    ignored = []
+    if linkedin_url.strip():
+        parsed_url = parse_linkedin_url(linkedin_url)
+        ignored = parsed_url["ignored"]
+        # anything typed manually wins over what the URL says
+        query = query or parsed_url["query"]
+        title = title or parsed_url["title"]
+        niche = niche or parsed_url["niche"]
+        location = location or parsed_url["location"]
 
     full_query = build_query(query, title, niche, location, exclude)
     results = []
@@ -102,4 +175,5 @@ async def search_linkedin_profiles(query: str = "", max_results: int = 20,
 
             page += 1
 
-    return {"results": results[:max_results], "error": error, "query_used": full_query}
+        return {"results": results[:max_results], "error": error,
+            "query_used": full_query, "ignored_filters": ignored}
