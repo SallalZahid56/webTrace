@@ -84,6 +84,7 @@ class LinkedInSearchRequest(BaseModel):
     exclude: str = ""
     max_results: int = 20
     linkedin_url: str = ""
+    kind: str = "person"
 
 class LinkedInProfileResult(BaseModel):
     name: str
@@ -98,6 +99,7 @@ class LinkedInSearchResponse(BaseModel):
     results: List[LinkedInProfileResult]
     error: Optional[str] = None
     ignored_filters: List[str] = []
+    kind: str = "person"
 
 # ── Routes ────────────────────────────────────────────────────────
 
@@ -158,12 +160,14 @@ async def maps_scrape(req: MapsRequest):
 @app.post("/linkedin-search", response_model=LinkedInSearchResponse)
 async def linkedin_search(req: LinkedInSearchRequest):
     data = await search_linkedin_profiles(
-        req.query, req.max_results, req.title, req.niche,
-        req.location, req.exclude, req.linkedin_url
+        query=req.query, max_results=req.max_results, title=req.title,
+        niche=req.niche, location=req.location, exclude=req.exclude,
+        linkedin_url=req.linkedin_url, kind=req.kind,
     )
     return {
         "query": data.get("query_used", req.query),
         "results": data.get("results", []),
         "error": data.get("error"),
         "ignored_filters": data.get("ignored_filters", []),
+        "kind": data.get("kind", req.kind),
     }
